@@ -178,7 +178,7 @@ class LightningModel(LightningModule):
                  sync_dist=True)
         return loss
 
-    def validation_step(self, batch):
+    def validation_step(self, batch, batch_idx):
         """
         Lightning calls this inside the validation loop
         :param batch:
@@ -444,6 +444,6 @@ class LightningModel(LightningModule):
                             action="store_true",
                             help="Finish quickly for testing")
         parser.add_argument("--train",
-                            action="store_true",
-                            help="if set to False datasets will not be loaded to speed up loading of the model")
+                            action="store_false",
+                            help="if set to True datasets will not be loaded to speed up loading of the model")
         return parser
