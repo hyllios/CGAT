@@ -41,6 +41,9 @@ class LightningModel(LightningModule):
         """
         # init superclass
         super().__init__()
+        self.mean = torch.nn.parameter.Parameter(torch.zeros(1), requires_grad=False)
+        self.std = torch.nn.parameter.Parameter(torch.zeros(1), requires_grad=False)
+
         self.hparams = hparams
         if self.hparams.train:
             dataset = CompositionData(
@@ -72,8 +75,8 @@ class LightningModel(LightningModule):
             print('Normalization started')
             def collate_fn2(data_list): return [el[0].y for el in data_list]
             sample_target = torch.cat(collate_fn2(self.train_subset))
-            self.mean = torch.mean(sample_target, dim=0, keepdim=False)
-            self.std = torch.std(sample_target, dim=0, keepdim=False)
+            self.mean = torch.nn.parameter.Parameter(torch.mean(sample_target, dim=0, keepdim=False), requires_grad=False)
+            self.std = torch.nn.parameter.Parameter(torch.std(sample_target, dim=0, keepdim=False), requires_grad=False)
             print('mean:', self.mean, 'std:', self.std)
             print('normalization ended')
 
