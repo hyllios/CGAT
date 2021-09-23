@@ -23,7 +23,7 @@ from torch_geometric.data import Batch
 from data import CompositionData
 
 from pytorch_lightning.core import LightningModule
-
+import os, glob
 
 def collate_fn(datalist):
     return datalist
@@ -46,10 +46,17 @@ class LightningModel(LightningModule):
 
         self.hparams = hparams
         if self.hparams.train:
-            dataset = CompositionData(
-                data=self.hparams.data_path,
-                fea_path=self.hparams.fea_path,
-                max_neighbor_number=self.hparams.max_nbr)
+            datasets = []
+            for file in glob.glob(os.path.join(self.hparams.data_path,"*.pickle.gz")):
+                try:
+                    datasets.append(CompositionData(
+                    data=file,
+                    fea_path=self.hparams.fea_path,
+                    max_neighbor_number=self.hparams.max_nbr))
+                    print(file + ' loaded')
+                except:
+                    print(file + ' could not be loaded')
+            dataset = torch.utils.data.ConcatDataset(datasets)
             indices = list(range(len(dataset)))
             train_idx, test_idx = split(indices, random_state=self.hparams.seed,
                                         test_size=self.hparams.test_size)
@@ -318,9 +325,9 @@ class LightningModel(LightningModule):
         # network params
         parser.add_argument("--data-path",
                             type=str,
-                            default="data.pickle.gz",
+                            default="data/",
                             metavar="PATH",
-                            help="dataset path")
+                            help="path to folder that contains dataset files, tries to load all *.pickle.gz in folder")
         parser.add_argument("--fea-path",
                             type=str,
                             default="data/embeddings/onehot-embedding.json",
