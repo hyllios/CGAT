@@ -5,10 +5,10 @@ from torch.utils.data import DataLoader
 import pickle, gzip as gz
 
 
-model_path = '/home/test_user/QMC/test_CGAT/CGAT/CGAT/tb_logs/runs/f-{s}_t-11-10-2021_09:14:23/epoch=3-val_mae=0.19.ckpt'
+model_path = 'path.ckpt'
 model = LightningModel.load_from_checkpoint(model_path, train=False)
 
-data_path = 'test_data/layered_perovskites_input.pickle.gz'
+data_path = 'data.pickle.gz'
 dataset = CompositionData(
     data=data_path,
     fea_path=model.hparams.fea_path,
