@@ -17,7 +17,7 @@ class CompositionData(Dataset):
     automatically constructed from composition strings.
     """
 
-    def __init__(self, data, fea_path, radius=8.0, max_neighbor_number=12):
+    def __init__(self, data, fea_path, radius=8.0, max_neighbor_number=12, target='e_above_hull'):
         """
         """
 
@@ -37,9 +37,10 @@ class CompositionData(Dataset):
         assert os.path.exists(fea_path), "{} does not exist!".format(fea_path)
         self.atom_features = LoadFeaturiser(fea_path)
         self.atom_fea_dim = self.atom_features.embedding_size
+        self.target = target
 
     def __len__(self):
-        return len(self.data['target'])
+        return len(self.data['target'][self.target])
 
     @functools.lru_cache(maxsize=None)  # Cache loaded structures
     def __getitem__(self, idx):
@@ -84,7 +85,7 @@ class CompositionData(Dataset):
                 print(composition)
                 sys.exit()
 
-            target = self.data['target'][idx]
+            target = self.data['target'][self.target][idx]
             atom_fea = torch.Tensor(atom_fea)
             nbr_fea = torch.LongTensor(
                 self.data['input'][0][idx][:, 0:self.max_num_nbr].flatten())
@@ -101,7 +102,7 @@ class CompositionData(Dataset):
                 print(composition)
                 sys.exit()
 
-            target = self.data['target'][idx]
+            target = self.data['target'][self.target][idx]
             atom_fea = torch.Tensor(atom_fea)
             nbr_fea = torch.LongTensor(
                 self.data['input'][idx][0][:, 0:self.max_num_nbr].flatten())

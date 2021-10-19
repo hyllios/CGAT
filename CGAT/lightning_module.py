@@ -47,16 +47,25 @@ class LightningModel(LightningModule):
         self.hparams = hparams
         if self.hparams.train:
             datasets = []
-            for file in glob.glob(os.path.join(self.hparams.data_path,"*.pickle.gz")):
-                try:
-                    datasets.append(CompositionData(
-                    data=file,
-                    fea_path=self.hparams.fea_path,
-                    max_neighbor_number=self.hparams.max_nbr))
-                    print(file + ' loaded')
-                except:
-                    print(file + ' could not be loaded')
-            dataset = torch.utils.data.ConcatDataset(datasets)
+            try:
+                dataset =CompositionData(
+                        data=self.hparams.data_path,
+                        fea_path=self.hparams.fea_path,
+                        max_neighbor_number=self.hparams.max_nbr,
+                        target=self.hparams.target)
+                print(self.hparams.data_path + ' loaded')
+            except:
+                for file in glob.glob(os.path.join(self.hparams.data_path,"*.pickle.gz")):
+                    try:
+                        datasets.append(CompositionData(
+                        data=file,
+                        fea_path=self.hparams.fea_path,
+                        max_neighbor_number=self.hparams.max_nbr,
+                        target=self.hparams.target))
+                        print(file + ' loaded')
+                    except:
+                        print(file + ' could not be loaded')
+                dataset = torch.utils.data.ConcatDataset(datasets)
             indices = list(range(len(dataset)))
             train_idx, test_idx = split(indices, random_state=self.hparams.seed,
                                         test_size=self.hparams.test_size)
@@ -78,13 +87,25 @@ class LightningModel(LightningModule):
                 self.train_subset = torch.utils.data.Subset(train_set_2, train_idx)
             else:
                 self.train_subset = train_set_2
-
             print('Normalization started')
+#            params = {"batch_size": len(self.train_subset)//48,
+#                  "num_workers": 2,
+#                  "pin_memory": False,
+#                  "shuffle": False,
+#                  "drop_last": False
+#                  }
+#            print('length of train_subset', len(self.train_subset))
+#            def collate_fn2(data_list): return [el[0].y for el in data_list]
+#            norm_generator = DataLoader(self.train_subset, collate_fn=collate_fn2, **params)
+#            sample_target = []
+#            for i, el in enumerate(norm_generator):
+#                sample_target.append(torch.cat(el))
+#            sample_target = torch.cat(sample_target)
             def collate_fn2(data_list): return [el[0].y for el in data_list]
             sample_target = torch.cat(collate_fn2(self.train_subset))
             self.mean = torch.nn.parameter.Parameter(torch.mean(sample_target, dim=0, keepdim=False), requires_grad=False)
             self.std = torch.nn.parameter.Parameter(torch.std(sample_target, dim=0, keepdim=False), requires_grad=False)
-            print('mean:', self.mean, 'std:', self.std)
+            print('mean: ', self.mean.item(), 'std: ', self.std.item())
             print('normalization ended')
 
         # select loss function
@@ -162,7 +183,6 @@ class LightningModel(LightningModule):
         :return:
         """
         output, log_std, pred, target, target_norm = self.evaluate(batch)
-
         # calculate loss
         if not self.hparams.std_loss:
             loss = self.criterion(output, log_std, target_norm)
@@ -277,7 +297,7 @@ class LightningModel(LightningModule):
         params = {"batch_size": self.hparams.batch_size,
                   "num_workers": self.hparams.workers,
                   "pin_memory": False,
-                  "shuffle": True,
+                  "shuffle": False,
                   "drop_last": True
                   }
         print('length of train_subset', len(self.train_subset))
@@ -330,7 +350,7 @@ class LightningModel(LightningModule):
                             help="path to folder that contains dataset files, tries to load all *.pickle.gz in folder")
         parser.add_argument("--fea-path",
                             type=str,
-                            default="data/embeddings/onehot-embedding.json",
+                            default="../embeddings/matscholar-embedding.json",
                             metavar="PATH",
                             help="atom feature path")
         parser.add_argument("--version",
@@ -456,4 +476,11 @@ class LightningModel(LightningModule):
         parser.add_argument("--train",
                             action="store_false",
                             help="if set to True datasets will not be loaded to speed up loading of the model")
+        parser.add_argument("--target",
+                            default="e_above_hull_new",
+                            type=str,
+                            metavar="str",
+                            help="choose the target variable, the dataset dictionary should have a corresponding dictionary structure data['target'][target]")
+
         return parser
+

@@ -45,19 +45,38 @@ def main(hparams):
         mode='min',
         prefix='')
     print([hparams.first_gpu+el for el in range(hparams.gpus)])
-    trainer = pl.Trainer(
-        max_epochs=hparams.epochs,
-        gpus=hparams.gpus,
-        distributed_backend=hparams.distributed_backend,
-        # use_amp=hparams.use_16bit
-        checkpoint_callback=checkpoint_callback,
-        logger=logger,
-        check_val_every_n_epoch=2,
-#        auto_scale_batch_size='binsearch',
-#        accumulate_grad_batches=2,
-#        fast_dev_run=True,        
-        accumulate_grad_batches = hparams.acc_batches,
-    )
+    if hparams.ckp=='':
+        trainer = pl.Trainer(
+            max_epochs=hparams.epochs,
+            gpus=hparams.gpus,
+            distributed_backend=hparams.distributed_backend,
+            amp_backend='native',
+            amp_level = hparams.amp_optimization,
+            checkpoint_callback=checkpoint_callback,
+            logger=logger,
+            check_val_every_n_epoch=2,
+    #        auto_scale_batch_size='binsearch',
+    #        accumulate_grad_batches=2,
+    #        fast_dev_run=True,        
+            accumulate_grad_batches = hparams.acc_batches,
+        )
+    else:
+        trainer = pl.Trainer(
+            max_epochs=hparams.epochs,
+            gpus=hparams.gpus,
+            distributed_backend=hparams.distributed_backend,
+            amp_backend='native',
+            amp_level = hparams.amp_optimization,
+            checkpoint_callback=checkpoint_callback,
+            logger=logger,
+            check_val_every_n_epoch=2,
+            resume_from_checkpoint=hparams.ckp,
+    #        auto_scale_batch_size='binsearch',
+    #        accumulate_grad_batches=2,
+    #        fast_dev_run=True,        
+            accumulate_grad_batches = hparams.acc_batches,
+        )
+
 
     # ------------------------
     # 3 START TRAINING
@@ -94,17 +113,24 @@ if __name__ == '__main__':
         help='supports three options dp, ddp, ddp2'
     )
     parent_parser.add_argument(
-        '--use_16bit',
-        dest='use_16bit',
-        action='store_true',
-        help='if true uses 16 bit precision'
+        '--amp_optimization',
+        type=str,
+        default='00',
+        help='mixed precision format, default 00 (32), 01 mixed, 02 closer to 16'
     )
     parent_parser.add_argument(
-        '--first_gpu',
+        '--first-gpu',
         type=int,
         default=0,
         help='gpu number to use [first_gpu-first_gpu+gpus]'
     )
+    parent_parser.add_argument(
+        '--ckp',
+        type=str,
+        default='',
+        help='ckp path, if left empty no checkpoint is used'
+    )
+
 
     # each LightningModule defines arguments relevant to it
     parser = LightningModel.add_model_specific_args(parent_parser, root_dir)
