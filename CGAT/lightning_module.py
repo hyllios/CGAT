@@ -297,7 +297,7 @@ class LightningModel(LightningModule):
         params = {"batch_size": self.hparams.batch_size,
                   "num_workers": self.hparams.workers,
                   "pin_memory": False,
-                  "shuffle": False,
+                  "shuffle": True,
                   "drop_last": True
                   }
         print('length of train_subset', len(self.train_subset))
