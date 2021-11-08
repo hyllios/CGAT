@@ -10,7 +10,7 @@ The code requires the following external packages:
 * torch-spline-conv         1.2.1                    
 * torchaudio                0.8.0                    
 * torchvision               0.9.0+cu101              
-* pytorch-lightning         1.2.4 definitely 1.2.4
+* pytorch-lightning         1.2.4
 * pymatgen                  2022.0.5
 * tqdm
 * numpy
