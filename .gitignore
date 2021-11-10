@@ -134,3 +134,4 @@ dmypy.json
 # Data and tensorboard logs
 data/
 tb_logs/
+*.pickle.gz
