@@ -132,6 +132,6 @@ dmypy.json
 .idea/
 
 # Data and tensorboard logs
-data/
+original_data/
 tb_logs/
 *.pickle.gz
