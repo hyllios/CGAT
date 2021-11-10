@@ -377,7 +377,7 @@ def main(file: str = 'data_0_10000.pickle.gz', source='../unprepared_volume_data
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--file', default='data_0_10000.pickle.gz')
-    parser.add_argument('--source-dir', default='../unprepared_volume_data')
-    parser.add_argument('--target-dir', default='../data')
+    parser.add_argument('--source-dir', default='unprepared_volume_data')
+    parser.add_argument('--target-dir', default='data')
     args = parser.parse_args()
     main(file=args.file, source=args.source_dir, target=args.target_dir)

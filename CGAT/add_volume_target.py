@@ -12,6 +12,7 @@ def main():
     for i in tqdm(range(0, 2830000, 10000)):
         path = f'data_{i}_{i + 10000}.pickle.gz'
         data_list: List[ComputedStructureEntry] = pickle.load(gz.open(f'../original_data/{path}', 'rb'))
+        to_remove = []
         for data in data_list:
             data.data['volume'] = data.structure.volume
             try:
@@ -26,8 +27,12 @@ def main():
                     # calculate spg as a last resort
                     spg = data.structure.get_space_group_info()
                 data.data['id'] = f"{id_},{spg}"
-            id_ += 1
-        pickle.dump(data_list, gz.open(f'../unprepared_volume_data/{path}', 'wb'))
+            # remove elements with just one element
+            if len(set(data.structure.atomic_numbers)) == 1:
+                to_remove.append(data)
+            else:
+                id_ += 1
+        pickle.dump([data for data in data_list if data not in to_remove], gz.open(f'../unprepared_volume_data/{path}', 'wb'))
 
 
 if __name__ == '__main__':
