@@ -8,6 +8,7 @@ import numpy as np
 from typing import Union
 from scipy.special import erf
 from metropolis import MarkovChain
+import re
 
 DIR = 'data'
 
@@ -69,6 +70,8 @@ def main():
     ids = []
     elements = []
     convex_hulls = []
+    stoichiometries = []
+    pattern = re.compile(r'(\w+)(\d)')
 
     for i in trange(283):
         data = pickle.load(gz.open(getfile(i), 'rb'))
@@ -82,35 +85,52 @@ def main():
             ids.append(id_)
             elements.append(_elements)
             convex_hulls.append(convex_hull)
+            stoichiometries.append(data['batch_comp'][j][0])
+
+    print(f'{len(set(stoichiometries)) / len(stoichiometries):.2%} unique stoichiometries')
+    # with open('stoichiometries.txt', 'w+') as file:
+    #     file.write('\n'.join(stoichiometries))
 
     # indices = [i for i in range(len(spgs))]
     N = 50000
     random.seed(1)
     # sample = random.sample(indices, N)
 
+    plt.figure()
     plt.hist(spgs, bins=max(spgs), log=True)
     plt.title('Space groups')
-    plt.show()
+    # plt.show()
 
     all_elements = [el for l in elements for el in l]
 
+    plt.figure()
     plt.hist(all_elements, bins=max(all_elements))
     plt.title('Elements')
-    plt.show()
+    # plt.show()
 
+    plt.figure()
     plt.hist(convex_hulls, bins=100, log=True)
     plt.title('Distance to the convex hull')
-    plt.show()
+    # plt.show()
 
-    # spgs = np.array(spgs)
-    # elements = np.array(elements)
-    # convex_hulls = np.array(convex_hulls)
+    # plt.figure()
+    # plt.hist(stoichiometries, bins=len(set(stoichiometries)))
+    # plt.show()
+
+    spgs = np.array(spgs)
+    elements = np.array(elements)
+    convex_hulls = np.array(convex_hulls)
+    stoichiometries = np.array(stoichiometries)
 
     # sample for spgs
     # args = np.argsort(spgs)
-    # spgs = list(spgs[args])
-    # elements = list(elements[args])
-    # convex_hulls = list(convex_hulls[args])
+    np.random.seed(0)
+    args = [i for i in range(len(spgs))]
+    np.random.shuffle(args)
+    spgs = list(spgs[args])
+    elements = list(elements[args])
+    convex_hulls = list(convex_hulls[args])
+    stoichiometries = list(stoichiometries[args])
     #
     # spgs_sample = []
     # elements_sample = []
@@ -125,7 +145,7 @@ def main():
 
     # sample for convex hull
     # args = np.argsort(convex_hulls)
-    # spgs = list(spgs[args])
+    # spgs = list(spgs[arg s])
     # elements = list(elements[args])
     # convex_hulls = list(convex_hulls[args])
     #
@@ -145,24 +165,37 @@ def main():
     spgs_sample = []
     elements_sample = []
     convex_hulls_sample = []
+    stoichiometries_sample = set()
 
     element_list = list(set(all_elements))
     for el in tqdm(random.choices(element_list, k=N)):
-        i = find_element(elements, el)
-        spgs_sample.append(spgs.pop(i))
-        elements_sample.append(elements.pop(i))
-        convex_hulls_sample.append(convex_hulls.pop(i))
+        while True:
+            i = find_element(elements, el)
+            stoichiometry = stoichiometries.pop(i)
+            if stoichiometry not in stoichiometries_sample:
+                spgs_sample.append(spgs.pop(i))
+                elements_sample.append(elements.pop(i))
+                convex_hulls_sample.append(convex_hulls.pop(i))
+                stoichiometries_sample.add(stoichiometry)
+                break
+            else:
+                spgs.pop(i)
+                elements.pop(i)
+                convex_hulls.pop(i)
 
+    plt.figure()
     plt.hist(spgs_sample, bins=max(spgs_sample), log=True)
     plt.title('sampled Space groups')
-    plt.show()
+    # plt.show()
 
     all_elements = [el for l in elements_sample for el in l]
 
+    plt.figure()
     plt.hist(all_elements, bins=max(all_elements))
     plt.title('sampled Elements')
-    plt.show()
+    # plt.show()
 
+    plt.figure()
     plt.hist(convex_hulls_sample, bins=100, log=True)
     plt.title('sampled Distance to the convex hull')
     plt.show()
