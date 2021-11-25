@@ -56,7 +56,7 @@ class LightningModel(LightningModule):
                 print(self.hparams.data_path + ' loaded')
             except:
                 f_n = sorted([file for file in glob.glob(os.path.join(self.hparams.data_path,"*.pickle.gz"))])
-                for el in f_n:
+                for file in f_n:
                     try:
                         datasets.append(CompositionData(
                         data=file,
