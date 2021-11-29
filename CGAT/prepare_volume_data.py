@@ -10,12 +10,14 @@ import warnings
 import torch
 import pickle
 from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
+
 from roost_message import LoadFeaturiser
 
 
 def build_dataset_prepare(data,
                           target_property=['e_above_hull_new', 'e-form', 'volume'],
-                          fea_path="../embeddings/matscholar-embedding.json"):
+                          fea_path="embeddings/matscholar-embedding.json"):
     """Use to calculate features for lists of pickle and gzipped ComputedEntry pickles,
     returns dictionary with all necessary inputs. Use for lists with all materials having
     the same number of atoms"""
@@ -54,7 +56,10 @@ def build_dataset_prepare(data,
         target_ = []
     batch_ids_ = []
 
+    pbar = tqdm(total=10000)
+
     for input_, target, batch_comp, batch_ids in loader:
+        pbar.update(1)
         input1_.append(input_[0])
         comps_.append(input_[1])
         input2_.append(input_[2])
@@ -66,6 +71,8 @@ def build_dataset_prepare(data,
             target_.append(target)
         batch_comp_.append(batch_comp)
         batch_ids_.append(batch_ids)
+
+    pbar.close()
 
     input1_ = tensor2numpy(input1_)
     input2_ = tensor2numpy(input2_)
@@ -369,9 +376,13 @@ class Normalizer(object):
         self.std = state_dict["std"].cpu()
 
 
-def main(file: str = 'data_0_10000.pickle.gz', source='../unprepared_volume_data', target='../data'):
+def main(file: str = 'data_0_10000.pickle.gz', source='../unprepared_volume_data', target='../data', target_file: str = None):
     test = build_dataset_prepare(f'{source}/{file}')
-    pickle.dump(test, gz.open(f'{target}/{file}', 'wb'))
+    if target_file is None:
+        pickle.dump(test, gz.open(f'{target}/{file}', 'wb'))
+    else:
+        pickle.dump(test, gz.open(f'{target}/{target_file}', 'wb'))
+
 
 
 if __name__ == '__main__':
@@ -379,5 +390,6 @@ if __name__ == '__main__':
     parser.add_argument('--file', default='data_0_10000.pickle.gz')
     parser.add_argument('--source-dir', default='unprepared_volume_data')
     parser.add_argument('--target-dir', default='data')
+    parser.add_argument('--target-file', default=None)
     args = parser.parse_args()
-    main(file=args.file, source=args.source_dir, target=args.target_dir)
+    main(file=args.file, source=args.source_dir, target=args.target_dir, target_file=args.target_file)

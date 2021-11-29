@@ -14,7 +14,7 @@ def main():
         data_list: List[ComputedStructureEntry] = pickle.load(gz.open(f'../original_data/{path}', 'rb'))
         to_remove = []
         for data in data_list:
-            data.data['volume'] = data.structure.volume
+            data.data['volume'] = data.structure.volume / data.structure.num_sites
             try:
                 # use spg from Data if it is included
                 data.data['id'] = f"{id_},{data.data['spg']}"
