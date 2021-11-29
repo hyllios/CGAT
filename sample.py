@@ -8,7 +8,7 @@ import numpy as np
 from typing import Union
 from scipy.special import erf
 from metropolis import MarkovChain
-import re
+from pymatgen.entries.computed_entries import ComputedStructureEntry
 
 DIR = 'data'
 
@@ -65,140 +65,189 @@ def get_skewd_gaussion(skew, location, scale):
     return f
 
 
+def get_distribution(hist: Union[np.ndarray, list]):
+    def f(x):
+        x = int(x)
+        return hist[x]
+
+    return f
+
+
+def get_id(entry: Union[ComputedStructureEntry,str] ) -> int:
+    if isinstance(entry, ComputedStructureEntry):
+        return int(entry.data['id'].split(',')[0])
+    elif isinstance(entry, str):
+        return int(entry.split(',')[0])
+
+
+def search(data: list[ComputedStructureEntry], batch_id: int):
+    low = 0
+    high = len(data) - 1
+
+    while low <= high:
+        mid = (high + low) // 2
+        curr_id = get_id(data[mid])
+        if curr_id < batch_id:
+            low = mid + 1
+        elif curr_id > batch_id:
+            high = mid - 1
+        else:
+            return mid
+    raise ValueError
+
+
 def main():
-    spgs = []
-    ids = []
+    batch_ids = []
     elements = []
-    convex_hulls = []
     stoichiometries = []
-    pattern = re.compile(r'(\w+)(\d)')
+
+    test_val_data = pickle.load(gz.open('data/test_and_val_idx.pickle.gz', 'rb'))
+    test_val_batch_ids = set(batch_id[0] for batch_id in test_val_data['test_batch_ids'])
+    test_val_batch_ids.update(batch_id[0] for batch_id in test_val_data['val_batch_ids'])
+
+    # files = sorted([getfile(i) for i in range(283)])
 
     for i in trange(283):
         data = pickle.load(gz.open(getfile(i), 'rb'))
         for j, d in enumerate(data['batch_ids']):
-            split = d[0].split(',')
-            spg = int(split[-1].lstrip().rstrip(')'))
-            id_ = int(split[0])
-            _elements = set([Element(el.rstrip('0123456789')).Z for el in data['batch_comp'][j][0].split()])
-            convex_hull = data['target']['e_above_hull_new'][j][0]
-            spgs.append(spg)
-            ids.append(id_)
-            elements.append(_elements)
-            convex_hulls.append(convex_hull)
-            stoichiometries.append(data['batch_comp'][j][0])
+            if d[0] not in test_val_batch_ids:
+                split = d[0].split(',')
+                # batch_id = int(split[0])
+                _elements = set([Element(el.rstrip('0123456789')).Z for el in data['batch_comp'][j][0].split()])
+                batch_ids.append(d[0])
+                elements.append(_elements)
+                stoichiometries.append(data['batch_comp'][j][0])
 
     print(f'{len(set(stoichiometries)) / len(stoichiometries):.2%} unique stoichiometries')
-    # with open('stoichiometries.txt', 'w+') as file:
-    #     file.write('\n'.join(stoichiometries))
+
+    print('Calculating correlation matrix')
+    biggest_element = max([max(els) for els in elements])
+    correlation_matrix = np.zeros((biggest_element, biggest_element))
+    for els in tqdm(elements):
+        for i in els:
+            for j in els:
+                correlation_matrix[i - 1, j - 1] += 1
+
+    correlation_matrix = (
+            correlation_matrix.T / np.where(correlation_matrix.diagonal() != 0, correlation_matrix.diagonal(),
+                                            np.ones(biggest_element))).T
+
+    for i in range(biggest_element):
+        correlation_matrix[i, i] = 0
+
+    y = correlation_matrix.mean(axis=0)
+    distribution = get_distribution([min(150, i) for i in np.where(y > 1e-3, 1 / y, np.zeros_like(y))])
 
     # indices = [i for i in range(len(spgs))]
     N = 50000
     random.seed(1)
     # sample = random.sample(indices, N)
 
-    plt.figure()
-    plt.hist(spgs, bins=max(spgs), log=True)
-    plt.title('Space groups')
-    # plt.show()
-
-    all_elements = [el for l in elements for el in l]
-
-    plt.figure()
-    plt.hist(all_elements, bins=max(all_elements))
-    plt.title('Elements')
-    # plt.show()
-
-    plt.figure()
-    plt.hist(convex_hulls, bins=100, log=True)
-    plt.title('Distance to the convex hull')
-    # plt.show()
-
+    # all_elements = [el for l in elements for el in l]
+    #
     # plt.figure()
-    # plt.hist(stoichiometries, bins=len(set(stoichiometries)))
+    # plt.hist(all_elements, bins=max(all_elements))
+    # plt.title('Elements')
+    # plt.savefig('elements.pdf')
     # plt.show()
 
-    spgs = np.array(spgs)
+    batch_ids = np.array(batch_ids)
     elements = np.array(elements)
-    convex_hulls = np.array(convex_hulls)
     stoichiometries = np.array(stoichiometries)
 
-    # sample for spgs
-    # args = np.argsort(spgs)
     np.random.seed(0)
-    args = [i for i in range(len(spgs))]
+    args = [i for i in range(len(batch_ids))]
     np.random.shuffle(args)
-    spgs = list(spgs[args])
+    batch_ids = list(batch_ids[args])
     elements = list(elements[args])
-    convex_hulls = list(convex_hulls[args])
     stoichiometries = list(stoichiometries[args])
-    #
-    # spgs_sample = []
-    # elements_sample = []
-    # convex_hulls_sample = []
-    # m, M = min(spgs), max(spgs)
-    # for _ in trange(N):
-    #     spg = random.randint(m, M)
-    #     i = find_closest(spgs, spg)
-    #     spgs_sample.append(spgs.pop(i))
-    #     elements_sample.append(elements.pop(i))
-    #     convex_hulls_sample.append(convex_hulls.pop(i))
-
-    # sample for convex hull
-    # args = np.argsort(convex_hulls)
-    # spgs = list(spgs[arg s])
-    # elements = list(elements[args])
-    # convex_hulls = list(convex_hulls[args])
-    #
-    # spgs_sample = []
-    # elements_sample = []
-    # convex_hulls_sample = []
-    #
-    # chain = MarkovChain(get_skewd_gaussion(100, -0.02, 0.7), lambda: random.random() * convex_hulls[-1])
-    # chain.step(N - 1)
-    # for v in tqdm(chain):
-    #     i = find_closest(convex_hulls, v)
-    #     spgs_sample.append(spgs.pop(i))
-    #     elements_sample.append(elements.pop(i))
-    #     convex_hulls_sample.append(convex_hulls.pop(i))
 
     # sample for elements
-    spgs_sample = []
+    sample_batch_ids = set()
     elements_sample = []
-    convex_hulls_sample = []
     stoichiometries_sample = set()
 
-    element_list = list(set(all_elements))
-    for el in tqdm(random.choices(element_list, k=N)):
+    chain = MarkovChain(distribution, lambda: random.randint(0, biggest_element - 1))
+    chain.step(N)
+
+    # element_list = list(set(all_elements))
+    # for el in tqdm(random.choices(element_list, k=N)):
+    bar = tqdm(total=N)
+    while len(sample_batch_ids) < N:
+        chain.step(1)
+        el = chain[-1] + 1
         while True:
             i = find_element(elements, el)
+            if i is None:
+                break
             stoichiometry = stoichiometries.pop(i)
             if stoichiometry not in stoichiometries_sample:
-                spgs_sample.append(spgs.pop(i))
+                sample_batch_ids.add(batch_ids.pop(i))
                 elements_sample.append(elements.pop(i))
-                convex_hulls_sample.append(convex_hulls.pop(i))
                 stoichiometries_sample.add(stoichiometry)
+                bar.update(1)
                 break
             else:
-                spgs.pop(i)
                 elements.pop(i)
-                convex_hulls.pop(i)
+                batch_ids.pop(i)
+    bar.close()
 
-    plt.figure()
-    plt.hist(spgs_sample, bins=max(spgs_sample), log=True)
-    plt.title('sampled Space groups')
+    # all_elements = [el for l in elements_sample for el in l]
+    #
+    # plt.figure()
+    # plt.hist(all_elements, bins=max(all_elements))
+    # plt.title('sampled Elements')
+    # plt.savefig('sampled_elements.pdf')
     # plt.show()
+    sample_data = []
+    for i in trange(283):
+        data = pickle.load(gz.open(getfile(i), 'rb'))
+        sample_indices = []
+        test_val_indices = []
+        curr_sample_batch_ids = []
+        for j, batch_id in enumerate(data['batch_ids']):
+            batch_id = batch_id[0]
+            if batch_id in sample_batch_ids:
+                sample_indices.append(j)
+                sample_batch_ids.remove(batch_id)
+                curr_sample_batch_ids.append(get_id(batch_id))
+            elif batch_id in test_val_indices:
+                test_val_indices.append(j)
+                test_val_batch_ids.remove(batch_id)
+        if len(sample_indices) > 0:
+            unprepared_data: list[ComputedStructureEntry] = pickle.load(
+                gz.open(getfile(i).replace(f'{DIR}/', 'unprepared_volume_data/')))
+            for batch_id in curr_sample_batch_ids:
+                j = search(unprepared_data, batch_id)
+                sample_data.append(unprepared_data.pop(j))
+            # if len(sample_data.keys()) == 0:
+            #     sample_data['input'] = data['input'][:, sample_indices]
+            #     sample_data['batch_ids'] = [data['batch_ids'][j] for j in sample_indices]
+            #     sample_data['batch_comp'] = data['batch_comp'][sample_indices]
+            #     sample_data['target'] = {}
+            #     for target in data['target']:
+            #         sample_data['target'][target] = data['target'][target][sample_indices]
+            #     sample_data['comps'] = data['comps'][sample_indices]
+            # else:
+            #     sample_data['input'] = np.concatenate((sample_data['input'], data['input'][:, sample_indices]), axis=1)
+            #     sample_data['batch_ids'] += [data['batch_ids'][j] for j in sample_indices]
+            #     sample_data['batch_comp'] = np.concatenate((sample_data['batch_comp'], data['batch_comp']))
+            #     for target in data['target']:
+            #         sample_data['target'][target] = np.concatenate((sample_data['target'][target],
+            #                                                         data['target'][target][sample_indices]))
+            #     sample_data['comps'] = np.concatenate((sample_data['comps'], data['comps'][sample_indices]))
+            all_used_indices = sorted(sample_indices + test_val_indices, reverse=True)
+            data['input'] = np.delete(data['input'], all_used_indices, axis=1)
+            for j in all_used_indices:
+                data['batch_ids'].pop(j)
+            data['batch_comp'] = np.delete(data['batch_comp'], all_used_indices)
+            data['comps'] = np.delete(data['comps'], all_used_indices)
+            for target in data['target']:
+                data['target'][target] = np.delete(data['target'][target], all_used_indices)
+        pickle.dump(data, gz.open(getfile(i).replace(f'{DIR}/', 'active_learning/'), 'wb'))
+    pickle.dump(sample_data, gz.open('active_learning/unprepared_sample.pickle.gz', 'wb'))
 
-    all_elements = [el for l in elements_sample for el in l]
 
-    plt.figure()
-    plt.hist(all_elements, bins=max(all_elements))
-    plt.title('sampled Elements')
-    # plt.show()
-
-    plt.figure()
-    plt.hist(convex_hulls_sample, bins=100, log=True)
-    plt.title('sampled Distance to the convex hull')
-    plt.show()
 
 
 if __name__ == '__main__':
