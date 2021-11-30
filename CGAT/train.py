@@ -117,10 +117,10 @@ if __name__ == '__main__':
     parent_parser.add_argument("--test",
         action="store_true",
         help="whether to train or test"
-
+    )
 
     # each LightningModule defines arguments relevant to it
-    parser = LightningModel.add_model_specific_args(parent_parser, root_dir)
+    parser = LightningModel.add_model_specific_args(parent_parser)
     hyperparams = parser.parse_args()
 
     # ---------------------

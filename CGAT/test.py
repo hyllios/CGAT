@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
 
     # each LightningModule defines arguments relevant to it
-    parser = LightningModel.add_model_specific_args(parent_parser, root_dir)
+    parser = LightningModel.add_model_specific_args(parent_parser)
     hyperparams = parser.parse_args()
 
     print(hyperparams)
