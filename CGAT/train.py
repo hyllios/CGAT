@@ -23,41 +23,35 @@ def main(hparams):
     Main training routine specific for this project
     :param hparams:
     """
-    # ------------------------
-    # 1 INIT LIGHTNING MODEL
-    # ------------------------
+    # initialize model
     model = LightningModel(hparams)
-
-    # ------------------------
-    # 2 INIT TRAINER
-    # ------------------------
+    # definte path for model checkpoints and tensorboard 
     name="runs/f-{s}_t-"+"{date:%d-%m-%Y_%H:%M:%S}".format(
                                                 date=datetime.datetime.now(),
                                                 s=hparams.seed)
-                                                
+    # initialize logger                                            
     logger = TensorBoardLogger("tb_logs", name=name)
+    # define checkpoint callback
     checkpoint_callback = ModelCheckpoint(
-        filename='{epoch}-{val_mae:.2f}',
+        filename='{epoch}-{val_mae:.3f}',
         dirpath = os.path.join(os.getcwd(),'tb_logs/',name),
         save_top_k=1,
         verbose=True,
         monitor='val_mae',
         mode='min',
         prefix='')
-    print([hparams.first_gpu+el for el in range(hparams.gpus)])
+
+    print('the model will train on the following gpus:', [hparams.first_gpu+el for el in range(hparams.gpus)])
     if hparams.ckp=='':
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
-            gpus=hparams.gpus,
+            gpus=[hparams.first_gpu+el for el in range(hparams.gpus)],
             distributed_backend=hparams.distributed_backend,
             amp_backend='native',
             amp_level = hparams.amp_optimization,
             checkpoint_callback=checkpoint_callback,
             logger=logger,
             check_val_every_n_epoch=2,
-    #        auto_scale_batch_size='binsearch',
-    #        accumulate_grad_batches=2,
-    #        fast_dev_run=True,        
             accumulate_grad_batches = hparams.acc_batches,
         )
     else:
@@ -71,40 +65,30 @@ def main(hparams):
             logger=logger,
             check_val_every_n_epoch=2,
             resume_from_checkpoint=hparams.ckp,
-    #        auto_scale_batch_size='binsearch',
-    #        accumulate_grad_batches=2,
-    #        fast_dev_run=True,        
             accumulate_grad_batches = hparams.acc_batches,
         )
 
 
-    # ------------------------
-    # 3 START TRAINING
-    # ------------------------
+    # START TRAINING
     trainer.fit(model)
 
 
 if __name__ == '__main__':
-    # ------------------------
-    # TRAINING ARGUMENTS
-    # ------------------------
-    # these are project-wide arguments
-
     root_dir = os.path.dirname(os.path.realpath(__file__))
     parent_parser = ArgumentParser(add_help=False)
 
-    # gpu args
+    # argumentparser for the training process
     parent_parser.add_argument(
         '--gpus',
         type=int,
         default=4,
-        help='how many gpus'
+        help='number of gpus to use'
     )
     parent_parser.add_argument(
         '--acc_batches',
         type=int,
         default=1,
-        help='gpu number to use [first_gpu-first_gpu+gpus]'
+        help='number of batches to accumulate'
     )
     parent_parser.add_argument(
         '--distributed_backend',
@@ -130,6 +114,9 @@ if __name__ == '__main__':
         default='',
         help='ckp path, if left empty no checkpoint is used'
     )
+    parent_parser.add_argument("--test",
+        action="store_true",
+        help="whether to train or test"
 
 
     # each LightningModule defines arguments relevant to it
