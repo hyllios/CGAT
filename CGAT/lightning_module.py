@@ -67,16 +67,31 @@ class LightningModel(LightningModule):
                     except:
                         print(file + ' could not be loaded')
                 dataset = torch.utils.data.ConcatDataset(datasets)
-            indices = list(range(len(dataset)))
-            train_idx, test_idx = split(indices, random_state=self.hparams.seed,
-                                        test_size=self.hparams.test_size)
-            train_set = torch.utils.data.Subset(dataset, train_idx)
-            self.test_set = torch.utils.data.Subset(dataset, test_idx)
-            indices = list(range(len(train_set)))
-            train_idx, val_idx = split(indices, random_state=self.hparams.seed,
-                                       test_size=self.hparams.val_size / (1 - self.hparams.test_size))
-            train_set_2 = torch.utils.data.Subset(train_set, train_idx)
-            self.val_subset = torch.utils.data.Subset(train_set, val_idx)
+
+            if self.hparams.test_path is None or self.hparams.val_path is None:
+                indices = list(range(len(dataset)))
+                train_idx, test_idx = split(indices, random_state=self.hparams.seed,
+                                            test_size=self.hparams.test_size)
+                train_set = torch.utils.data.Subset(dataset, train_idx)
+                self.test_set = torch.utils.data.Subset(dataset, test_idx)
+                indices = list(range(len(train_set)))
+                train_idx, val_idx = split(indices, random_state=self.hparams.seed,
+                                           test_size=self.hparams.val_size / (1 - self.hparams.test_size))
+                train_set_2 = torch.utils.data.Subset(train_set, train_idx)
+                self.val_subset = torch.utils.data.Subset(train_set, val_idx)
+            else:
+                test_data = CompositionData(data=self.hparams.test_path,
+                                            fea_path=self.hparams.fea_path,
+                                            max_neighbor_number=self.hparams.max_nbr,
+                                            target=self.hparams.target)
+                val_data = CompositionData(data=self.hparams.val_path,
+                                            fea_path=self.hparams.fea_path,
+                                            max_neighbor_number=self.hparams.max_nbr,
+                                            target=self.hparams.target)
+                train_set = dataset
+                test_set = test_data
+                train_set_2 = train_set
+                self.val_subset = val_data
 
             # Use train_percentage to get errors for different training set sizes
             # but same test and validation sets
@@ -482,6 +497,14 @@ class LightningModel(LightningModule):
                             type=str,
                             metavar="str",
                             help="choose the target variable, the dataset dictionary should have a corresponding dictionary structure data['target'][target]")
+        parser.add_argument("--test-path",
+                            default=None,
+                            type=str,
+                            help="path to data set with the test set (only used in combination with --val-path)")
+        parser.add_argument("--val-path",
+                            default=None,
+                            type=str,
+                            help="path to data set with the validation set (only used in combination with --val-path)")
 
         return parser
 

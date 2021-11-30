@@ -102,8 +102,9 @@ def main():
     stoichiometries = []
 
     test_val_data = pickle.load(gz.open('data/test_and_val_idx.pickle.gz', 'rb'))
-    test_val_batch_ids = set(batch_id[0] for batch_id in test_val_data['test_batch_ids'])
-    test_val_batch_ids.update(batch_id[0] for batch_id in test_val_data['val_batch_ids'])
+    test_batch_ids = set([batch_id[0] for batch_id in test_val_data['test_batch_ids']])
+    val_batch_ids = set([batch_id[0] for batch_id in test_val_data['val_batch_ids']])
+    test_val_batch_ids = test_batch_ids | val_batch_ids
 
     # files = sorted([getfile(i) for i in range(283)])
 
@@ -200,26 +201,43 @@ def main():
     # plt.savefig('sampled_elements.pdf')
     # plt.show()
     sample_data = []
+    test_data = []
+    val_data = []
     for i in trange(283):
         data = pickle.load(gz.open(getfile(i), 'rb'))
         sample_indices = []
         test_val_indices = []
         curr_sample_batch_ids = []
+        curr_test_batch_ids = []
+        curr_val_batch_ids = []
         for j, batch_id in enumerate(data['batch_ids']):
             batch_id = batch_id[0]
             if batch_id in sample_batch_ids:
                 sample_indices.append(j)
                 sample_batch_ids.remove(batch_id)
                 curr_sample_batch_ids.append(get_id(batch_id))
-            elif batch_id in test_val_indices:
+            elif batch_id in test_batch_ids:
                 test_val_indices.append(j)
                 test_val_batch_ids.remove(batch_id)
-        if len(sample_indices) > 0:
+                test_batch_ids.remove(batch_id)
+                curr_test_batch_ids.append(get_id(batch_id))
+            elif batch_id in val_batch_ids:
+                test_val_indices.append(j)
+                test_val_batch_ids.remove(batch_id)
+                val_batch_ids.remove(batch_id)
+                curr_val_batch_ids.append(get_id(batch_id))
+        if len(sample_indices) > 0 or len(test_val_indices) > 0:
             unprepared_data: list[ComputedStructureEntry] = pickle.load(
                 gz.open(getfile(i).replace(f'{DIR}/', 'unprepared_volume_data/')))
             for batch_id in curr_sample_batch_ids:
                 j = search(unprepared_data, batch_id)
                 sample_data.append(unprepared_data.pop(j))
+            for batch_id in curr_test_batch_ids:
+                j = search(unprepared_data, batch_id)
+                test_data.append(unprepared_data.pop(j))
+            for batch_id in curr_val_batch_ids:
+                j = search(unprepared_data, batch_id)
+                val_data.append(unprepared_data.pop(j))
             # if len(sample_data.keys()) == 0:
             #     sample_data['input'] = data['input'][:, sample_indices]
             #     sample_data['batch_ids'] = [data['batch_ids'][j] for j in sample_indices]
@@ -246,6 +264,8 @@ def main():
                 data['target'][target] = np.delete(data['target'][target], all_used_indices)
         pickle.dump(data, gz.open(getfile(i).replace(f'{DIR}/', 'active_learning/'), 'wb'))
     pickle.dump(sample_data, gz.open('active_learning/unprepared_sample.pickle.gz', 'wb'))
+    pickle.dump(test_data, gz.open('active_learning/unprepared_test_data.pickle.gz', 'wb'))
+    pickle.dump(val_data, gz.open('active_learning/unprepared_val_data.pickle.gz', 'wb'))
 
 
 

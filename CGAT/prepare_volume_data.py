@@ -56,10 +56,10 @@ def build_dataset_prepare(data,
         target_ = []
     batch_ids_ = []
 
-    pbar = tqdm(total=10000)
+    # pbar = tqdm(total=10000)
 
-    for input_, target, batch_comp, batch_ids in loader:
-        pbar.update(1)
+    for input_, target, batch_comp, batch_ids in tqdm(loader):
+        # pbar.update(1)
         input1_.append(input_[0])
         comps_.append(input_[1])
         input2_.append(input_[2])
@@ -72,7 +72,7 @@ def build_dataset_prepare(data,
         batch_comp_.append(batch_comp)
         batch_ids_.append(batch_ids)
 
-    pbar.close()
+    # pbar.close()
 
     input1_ = tensor2numpy(input1_)
     input2_ = tensor2numpy(input2_)
