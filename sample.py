@@ -164,34 +164,37 @@ def main():
     stoichiometries = list(stoichiometries[args])
 
     # sample for elements
-    sample_batch_ids = set()
-    elements_sample = []
-    stoichiometries_sample = set()
+    # sample_batch_ids = set()
+    # elements_sample = []
+    # stoichiometries_sample = set()
+    #
+    # chain = MarkovChain(distribution, lambda: random.randint(0, biggest_element - 1))
+    # chain.step(N)
+    #
+    # # element_list = list(set(all_elements))
+    # # for el in tqdm(random.choices(element_list, k=N)):
+    # bar = tqdm(total=N)
+    # while len(sample_batch_ids) < N:
+    #     chain.step(1)
+    #     el = chain[-1] + 1
+    #     while True:
+    #         i = find_element(elements, el)
+    #         if i is None:
+    #             break
+    #         stoichiometry = stoichiometries.pop(i)
+    #         if stoichiometry not in stoichiometries_sample:
+    #             sample_batch_ids.add(batch_ids.pop(i))
+    #             elements_sample.append(elements.pop(i))
+    #             stoichiometries_sample.add(stoichiometry)
+    #             bar.update(1)
+    #             break
+    #         else:
+    #             elements.pop(i)
+    #             batch_ids.pop(i)
+    # bar.close()
 
-    chain = MarkovChain(distribution, lambda: random.randint(0, biggest_element - 1))
-    chain.step(N)
-
-    # element_list = list(set(all_elements))
-    # for el in tqdm(random.choices(element_list, k=N)):
-    bar = tqdm(total=N)
-    while len(sample_batch_ids) < N:
-        chain.step(1)
-        el = chain[-1] + 1
-        while True:
-            i = find_element(elements, el)
-            if i is None:
-                break
-            stoichiometry = stoichiometries.pop(i)
-            if stoichiometry not in stoichiometries_sample:
-                sample_batch_ids.add(batch_ids.pop(i))
-                elements_sample.append(elements.pop(i))
-                stoichiometries_sample.add(stoichiometry)
-                bar.update(1)
-                break
-            else:
-                elements.pop(i)
-                batch_ids.pop(i)
-    bar.close()
+    # random sample
+    sample_batch_ids = set(random.sample(batch_ids, N))
 
     # all_elements = [el for l in elements_sample for el in l]
     #
@@ -263,7 +266,7 @@ def main():
             for target in data['target']:
                 data['target'][target] = np.delete(data['target'][target], all_used_indices)
         pickle.dump(data, gz.open(getfile(i).replace(f'{DIR}/', 'active_learning/'), 'wb'))
-    pickle.dump(sample_data, gz.open('active_learning/unprepared_sample.pickle.gz', 'wb'))
+    pickle.dump(sample_data, gz.open('active_learning/unprepared_random_sample.pickle.gz', 'wb'))
     pickle.dump(test_data, gz.open('active_learning/unprepared_test_data.pickle.gz', 'wb'))
     pickle.dump(val_data, gz.open('active_learning/unprepared_val_data.pickle.gz', 'wb'))
 
