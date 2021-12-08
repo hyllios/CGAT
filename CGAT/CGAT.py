@@ -1,3 +1,5 @@
+import itertools
+
 from roost_message import Roost
 import torch.nn.functional as F
 import torch
@@ -595,3 +597,13 @@ class CGAtNet(nn.Module):
 
     def __repr__(self):
         return '{}'.format(self.__class__.__name__)
+
+    def get_output_parameters(self):
+        return self.output_nn.parameters()
+
+    def get_hidden_parameters(self):
+        return itertools.chain(self.embedding.parameters(),
+                               self.nbr_embedding.parameters(),
+                               self.graphs.parameters(),
+                               self.roost.parameters(),
+                               self.cry_pool.parameters())

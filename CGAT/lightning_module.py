@@ -281,22 +281,27 @@ class LightningModel(LightningModule):
         return whatever optimizers we want here
         :return: list of optimizers
         """
+        # Select parameters, which should be trained
+        if self.hparams.only_residual:
+            parameters = self.model.get_output_parameters()
+        else:
+            parameters = self.model.parameters()
         # Select Optimiser
         if self.hparams.optim == "SGD":
-            optimizer = optim.SGD(self.model.parameters(),
+            optimizer = optim.SGD(parameters,
                                   lr=self.hparams.learning_rate,
                                   weight_decay=self.hparams.weight_decay,
                                   momentum=self.hparams.momentum)
         elif self.hparams.optim == "Adam":
-            optimizer = optim.Adam(self.model.parameters(),
+            optimizer = optim.Adam(parameters,
                                    lr=self.hparams.learning_rate,
                                    weight_decay=self.hparams.weight_decay)
         elif self.hparams.optim == "AdamW":
-            optimizer = optim.AdamW(self.model.parameters(),
+            optimizer = optim.AdamW(parameters,
                                     lr=self.hparams.learning_rate,
                                     weight_decay=self.hparams.weight_decay)
         elif self.hparams.optim == "LAMB":
-            optimizer = JITLamb(self.model.parameters(),
+            optimizer = JITLamb(parameters,
                                 lr=self.hparams.learning_rate,
                                 weight_decay=self.hparams.weight_decay)
         else:
@@ -516,5 +521,8 @@ class LightningModel(LightningModule):
                             default=None,
                             type=str,
                             help="path to data set with the validation set (only used in combination with --val-path)")
+        parser.add_argument("--only-residual",
+                            action="store true",
+                            help="Train only the residual network for transfer learning.")
 
         return parser
