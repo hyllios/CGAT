@@ -99,7 +99,7 @@ class LightningModel(LightningModule):
                         os.path.join(self.hparams.val_path, "*.pickle.gz"))])
 
                 train_set = dataset
-                test_set = test_data
+                self.test_set = test_data
                 train_set_2 = train_set
                 self.val_subset = val_data
 
