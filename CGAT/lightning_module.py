@@ -3,7 +3,6 @@ Example template for defining a system
 """
 from roost_message import collate_batch
 import importlib
-
 from lambs import JITLamb
 import numpy as np
 
@@ -38,16 +37,18 @@ class LightningModel(LightningModule):
     def __init__(self, hparams):
         """
         Pass in parsed HyperOptArgumentParser to the model
-        :param hparams:
+        Args:
+        hparams: Namespace passed from the argument parser including all the hyperparameters
         """
-        # init superclass
         super().__init__()
+        # initialization of mean and standard deviation of the target data (needed for reloading without recalculation)
         self.mean = torch.nn.parameter.Parameter(torch.zeros(1), requires_grad=False)
         self.std = torch.nn.parameter.Parameter(torch.zeros(1), requires_grad=False)
-
         self.hparams = hparams
+        # datasets are loaded for training or testing not needed in production
         if self.hparams.train:
             datasets = []
+            # used for single file
             try:
                 dataset = CompositionData(
                     data=self.hparams.data_path,
@@ -55,8 +56,10 @@ class LightningModel(LightningModule):
                     max_neighbor_number=self.hparams.max_nbr,
                     target=self.hparams.target)
                 print(self.hparams.data_path + ' loaded')
+            # used for folder of dataset files
             except:
                 f_n = sorted([file for file in glob.glob(os.path.join(self.hparams.data_path, "*.pickle.gz"))])
+                print("{} files to load".format(len(f_n)))
                 for file in f_n:
                     try:
                         datasets.append(CompositionData(
@@ -67,6 +70,7 @@ class LightningModel(LightningModule):
                         print(file + ' loaded')
                     except:
                         print(file + ' could not be loaded')
+                print("{} files succesfully loaded".format(len(datasets)))
                 dataset = torch.utils.data.ConcatDataset(datasets)
 
             if self.hparams.test_path is None or self.hparams.val_path is None:
@@ -95,7 +99,7 @@ class LightningModel(LightningModule):
                         os.path.join(self.hparams.val_path, "*.pickle.gz"))])
 
                 train_set = dataset
-                test_set = test_data
+                self.test_set = test_data
                 train_set_2 = train_set
                 self.val_subset = val_data
 
@@ -111,19 +115,6 @@ class LightningModel(LightningModule):
                 self.train_subset = train_set_2
             print('Normalization started')
 
-            #            params = {"batch_size": len(self.train_subset)//48,
-            #                  "num_workers": 2,
-            #                  "pin_memory": False,
-            #                  "shuffle": False,
-            #                  "drop_last": False
-            #                  }
-            #            print('length of train_subset', len(self.train_subset))
-            #            def collate_fn2(data_list): return [el[0].y for el in data_list]
-            #            norm_generator = DataLoader(self.train_subset, collate_fn=collate_fn2, **params)
-            #            sample_target = []
-            #            for i, el in enumerate(norm_generator):
-            #                sample_target.append(torch.cat(el))
-            #            sample_target = torch.cat(sample_target)
             def collate_fn2(data_list):
                 return [el[0].y for el in data_list]
 
@@ -154,15 +145,20 @@ class LightningModel(LightningModule):
     # MODEL SETUP
     # ---------------------
     def norm(self, tensor):
+        """
+        normalizes tensor
+        """
         return (tensor - self.mean.cuda()) / self.std.cuda()
 
     def denorm(self, normed_tensor):
+        """
+        return normalized tensor to original form
+        """
         return normed_tensor * self.std.cuda() + self.mean.cuda()
 
     def __build_model(self):
         """
-        Layout model
-        :return:
+        builds model from hparams
         """
         gat = importlib.import_module(self.hparams.version)
         self.model = gat.CGAtNet(200,
@@ -185,6 +181,18 @@ class LightningModel(LightningModule):
     # ---------------------
 
     def evaluate(self, batch):
+        """
+        calculates normalized and unnormalized output of the network. 
+        Batch object should include input for CGAT and Roost
+        Args:
+            batch: Tuple of graph object from pytorch geometric and input for Roost
+        Returns:
+            output: Normalized output
+            log_std: log std for uncertainty estimation/loss function
+            pred: Denormalized output
+            target: target value for error calculations
+            norm of target: normalized target for training
+        """
         device = next(self.model.parameters()).device
         b_comp, batch = [el[1] for el in batch], [el[0] for el in batch]
         batch = (Batch.from_data_list(batch)).to(device)
@@ -199,15 +207,22 @@ class LightningModel(LightningModule):
     def forward(self, batch, batch_idx):
         """
         Use for prediction with a dataloader
+         Args:
+        batch: Tuple of graph object from pytorch geometric and input for Roost
+        batch_idx: identifiers of batch elements
+        Returns:
+            denormalized prediction of the network
         """
         _, log_std, pred, _, _ = self.evaluate(batch)
         return pred
 
     def training_step(self, batch, batch_idx):
         """
-        Lightning calls this inside the training loop
-        :param batch:
-        :return:
+        Calculates loss and various error metrics
+        Args:
+        batch: Tuple of graph object from pytorch geometric and input for Roost
+        batch_idx: identifiers of batch elements
+        Returns: loss
         """
         output, log_std, pred, target, target_norm = self.evaluate(batch)
         # calculate loss
@@ -237,9 +252,11 @@ class LightningModel(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         """
-        Lightning calls this inside the validation loop
-        :param batch:
-        :return:
+        Calculates various error metrics for validation
+        Args:
+            batch: Tuple of graph object from pytorch geometric and input for Roost
+            batch_idx: identifiers of batch elements
+        Returns:
         """
         output, log_std, pred, target, target_norm = self.evaluate(batch)
 
@@ -256,9 +273,11 @@ class LightningModel(LightningModule):
 
     def test_step(self, batch, batch_idx):
         """
-        Lightning calls this inside the validation loop
-        :param batch:
-        :return:
+        Calculates various error metrics for testing
+        Args:
+            batch: Tuple of graph object from pytorch geometric and input for Roost
+            batch_idx: identifiers of batch elements
+        Returns:
         """
         output, log_std, pred, target, target_norm = self.evaluate(batch)
 
@@ -278,8 +297,10 @@ class LightningModel(LightningModule):
     # ---------------------
     def configure_optimizers(self):
         """
-        return whatever optimizers we want here
-        :return: list of optimizers
+        Creates optimizers for training according to the hyperparameter settings
+        Args:
+        Returns:
+            [optimizer], [scheduler]: Tuple of list of optimizers and list of learning rate schedulers
         """
         # Select parameters, which should be trained
         if self.hparams.only_residual:
@@ -326,18 +347,30 @@ class LightningModel(LightningModule):
         return [optimizer], [scheduler]
 
     def train_dataloader(self):
+        """
+        creates dataloader for training according to the hyperparameters
+        Args:
+        Returns:
+            train_generator: Dataloader for training dataset
+        """
         params = {"batch_size": self.hparams.batch_size,
                   "num_workers": self.hparams.workers,
                   "pin_memory": False,
                   "shuffle": True,
                   "drop_last": True
                   }
-        print('length of train_subset', len(self.train_subset))
+        print('length of train_subset: {}'.format(len(self.train_subset)))
         train_generator = DataLoader(
             self.train_subset, collate_fn=collate_fn, **params)
         return train_generator
 
     def val_dataloader(self):
+        """
+        creates dataloader for validation according to the hyperparameters
+        Args:
+        Returns:
+            val_generator: Dataloader for validation dataset
+        """
         params = {"batch_size": self.hparams.batch_size,
                   #              "num_workers": self.hparams.workers,
                   "pin_memory": False,
@@ -347,39 +380,45 @@ class LightningModel(LightningModule):
             self.val_subset,
             collate_fn=collate_fn,
             **params)
-        print('length of val_subset', len(self.val_subset))
+        print('length of val_subset: {}'.format(len(self.val_subset)))
         return val_generator
 
     def test_dataloader(self):
+        """
+        creates dataloader for testing according to the hyperparameters
+        Args:
+        Returns:
+            test_generator: Dataloader for testing dataset
+        """
         params = {"batch_size": self.hparams.batch_size,
                   #              "num_workers": self.hparams.workers,
                   "pin_memory": False,
                   "drop_last": True,
                   "shuffle": False}
         test_generator = DataLoader(
-            self.test_set, collate_fn=collate_fn, **params)
-        print('length of test_subset', len(self.test_set))
+            self.test_set,
+            collate_fn=collate_fn,
+            **params)
+        print('length of test_subset: {}'.format(len(self.test_set)))
         return test_generator
 
     @staticmethod
-    def add_model_specific_args(parent_parser, root_dir):  # pragma: no-cover
+    def add_model_specific_args(parent_parser):  # pragma: no-cover
         """
-        Parameters you define here will be available to your model through self.hparams
-        :param parent_parser:
-        :param root_dir:
-        :return:
+        Parameters defined here will be available through self.hparams
+        Args:
+            parent_parser: ArgumentParser from e.g. the training script that adds gpu settings and Trainer settings
+        Returns:
+            parser: ArgumentParser for all hyperparameters and training/test settings
         """
         parser = ArgumentParser(parents=[parent_parser])
 
-        # param overwrites
-        # parser.set_defaults(gradient_clip_val=5.0)
-
-        # network params
         parser.add_argument("--data-path",
                             type=str,
                             default="data/",
                             metavar="PATH",
-                            help="path to folder that contains dataset files, tries to load all *.pickle.gz in folder")
+                            help="path to folder/file that contains dataset files, tries to load all "
+                                 "*.pickle.gz in folder")
         parser.add_argument("--fea-path",
                             type=str,
                             default="../embeddings/matscholar-embedding.json",
@@ -485,7 +524,7 @@ class LightningModel(LightningModule):
                             help="start residual layers with 0 as prefactor")
         parser.add_argument("--mean-pooling",
                             action="store_false",
-                            help="chooses pooling variant")
+                            help="chooses pooling variant for attention heads (mean or concatenation)")
         parser.add_argument("--std-loss",
                             action="store_false",
                             help="whether to choose a loss function that considers uncertainty")
@@ -496,7 +535,8 @@ class LightningModel(LightningModule):
         parser.add_argument("--train-percentage",
                             default=0.0,
                             type=float,
-                            help="Percentage of the training data that is used for training (only use to get a training set size vs test error curve")
+                            help="Percentage of the training data that is used for training (only use to get"
+                                 " a training set size vs test error curve")
         parser.add_argument("--seed",
                             default=0,
                             type=int,
@@ -512,7 +552,8 @@ class LightningModel(LightningModule):
                             default="e_above_hull_new",
                             type=str,
                             metavar="str",
-                            help="choose the target variable, the dataset dictionary should have a corresponding dictionary structure data['target'][target]")
+                            help="choose the target variable, the dataset dictionary should have a corresponding"
+                                 "dictionary structure data['target'][target]")
         parser.add_argument("--test-path",
                             default=None,
                             type=str,
