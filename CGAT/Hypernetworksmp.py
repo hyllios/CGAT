@@ -275,9 +275,7 @@ class H_Net_0(nn.Module):
         self.out_ch = out_ch
 
     def forward(self, h_0, x):
-        #        print(h_0.shape)
         NN = self.Hyper(h_0)
-#        print(NN(h_0.view(h_0.shape[0], 1, h_0.shape[1])).shape)
         return NN(
             x.view(
                 x.shape[0],
@@ -309,7 +307,6 @@ class H_Net(nn.Module):
         self.out_ch = out_ch
 
     def forward(self, h_0, h_t, x):
-        #
         with torch.no_grad():
             self.damping.data = self.damping.data.clamp(0.0, 1.0)
         NN = self.Hyper(self.damping * h_0 + (1 - self.damping) * x)
