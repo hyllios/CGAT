@@ -10,6 +10,8 @@ from torch.utils.data import Dataset
 import pickle
 from roost_message import LoadFeaturiser
 
+import re
+
 
 class CompositionData(Dataset):
     """
@@ -65,6 +67,9 @@ class CompositionData(Dataset):
         """
         composition = self.data['batch_comp'][idx]
         elements = self.data['comps'][idx]
+        if isinstance(elements, str):
+            pattern = re.compile(r'([a-z]+)\d+', re.IGNORECASE)
+            elements = pattern.findall(self.data['batch_comp'][idx])
         try:
             elements = elements.tolist()
         except BaseException:
@@ -90,7 +95,7 @@ class CompositionData(Dataset):
             nbr_fea_idx_c += env_idx[:i] + env_idx[i + 1:]
 
         atom_fea_c = np.vstack([self.atom_features.get_fea(element)
-                                for element in elements2])
+                                    for element in elements2])
         atom_weights_c = torch.Tensor(weights)
         atom_fea_c = torch.Tensor(atom_fea_c)
         self_fea_idx_c = torch.LongTensor(self_fea_idx_c)

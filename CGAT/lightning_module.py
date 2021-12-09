@@ -403,7 +403,7 @@ class LightningModel(LightningModule):
         return test_generator
 
     @staticmethod
-    def add_model_specific_args(parent_parser):  # pragma: no-cover
+    def add_model_specific_args(parent_parser: ArgumentParser = None) -> ArgumentParser:  # pragma: no-cover
         """
         Parameters defined here will be available through self.hparams
         Args:
@@ -411,7 +411,10 @@ class LightningModel(LightningModule):
         Returns:
             parser: ArgumentParser for all hyperparameters and training/test settings
         """
-        parser = ArgumentParser(parents=[parent_parser])
+        if parent_parser is not None:
+            parser = ArgumentParser(parents=[parent_parser])
+        else:
+            parser = ArgumentParser()
 
         parser.add_argument("--data-path",
                             type=str,
@@ -563,7 +566,7 @@ class LightningModel(LightningModule):
                             type=str,
                             help="path to data set with the validation set (only used in combination with --val-path)")
         parser.add_argument("--only-residual",
-                            action="store true",
+                            action="store_true",
                             help="Train only the residual network for transfer learning.")
 
         return parser
