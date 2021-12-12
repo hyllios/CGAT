@@ -64,7 +64,7 @@ def main():
     for j, batch in tqdm(enumerate(loader)):
         _, _, pred, target, _ = model.evaluate(batch)
         row = {'errors': mean_absolute_error(target.cpu().numpy(), pred.cpu().numpy()),
-               'batch_ids': data['batch_ids'][0][0]}
+               'batch_ids': data['batch_ids'][j][0]}
         errors = errors.append(row, ignore_index=True)
 
     errors.to_csv(get_file(i, PATH + '/temp').replace('data', 'errors').replace('pickle.gz', 'csv'))
