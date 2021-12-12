@@ -49,7 +49,7 @@ def main():
     model.to('cuda')
 
     # declare dataframe for saving errors
-    errors = pd.DataFrame(columns=['batch_ids', 'errors', 'indices'])
+    errors = pd.DataFrame(columns=['batch_ids', 'errors'])
     PATH = 'active_learning'
     UNPREPARED_PATH = 'unprepared_volume_data'
     # iterate over unused data and evaluate the error
