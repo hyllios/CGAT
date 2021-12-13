@@ -1,9 +1,9 @@
 """
 Example template for defining a system
 """
-from roost_message import collate_batch
+from .roost_message import collate_batch
 import importlib
-from lambs import JITLamb
+from .lambs import JITLamb
 import numpy as np
 
 from argparse import ArgumentParser
@@ -17,9 +17,9 @@ from torch.nn.functional import mse_loss as mse
 
 from sklearn.model_selection import train_test_split as split
 
-from utils import RobustL1, RobustL2, cyclical_lr
+from .utils import RobustL1, RobustL2, cyclical_lr
 from torch_geometric.data import Batch
-from data import CompositionData
+from .data import CompositionData
 
 from pytorch_lightning.core import LightningModule
 import os, glob

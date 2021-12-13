@@ -1,14 +1,14 @@
 import itertools
 
-from roost_message import Roost
+from .roost_message import Roost
 import torch.nn.functional as F
 import torch
 from torch_scatter import scatter_max, scatter_add
 from torch_geometric.nn import MessagePassing
-from message_changed import SimpleNetwork, ResidualNetwork
+from .message_changed import SimpleNetwork, ResidualNetwork
 from torch_geometric.utils import softmax
 import torch.nn as nn
-from Hypernetworksmp import H_Net, H_Net_0
+from .Hypernetworksmp import H_Net, H_Net_0
 
 
 class MHAttention(nn.Module):

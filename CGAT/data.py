@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import pickle
-from roost_message import LoadFeaturiser
+from .roost_message import LoadFeaturiser
 
 import re
 
