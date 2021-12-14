@@ -12,8 +12,8 @@ def get_csv(i: int, path: str):
 
 
 def main():
-    PATH = '../active_learning'
-    UNPREPARED_PATH = '../unprepared_volume_data'
+    PATH = 'active_learning'
+    UNPREPARED_PATH = 'unprepared_volume_data'
 
     # Start by loading the errors file
     errors = pd.DataFrame(columns=['batch_ids', 'errors'])

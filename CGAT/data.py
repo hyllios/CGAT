@@ -68,8 +68,12 @@ class CompositionData(Dataset):
         composition = self.data['batch_comp'][idx]
         elements = self.data['comps'][idx]
         if isinstance(elements, str):
-            pattern = re.compile(r'([a-z]+)\d+', re.IGNORECASE)
-            elements = pattern.findall(self.data['batch_comp'][idx])
+            pattern = re.compile(r'([a-z]+)(\d+)', re.IGNORECASE)
+            matches = pattern.findall(self.data['batch_comp'][idx])
+            elements = []
+            for el, count in matches:
+                for _ in range(int(count)):
+                    elements.append(el)
         try:
             elements = elements.tolist()
         except BaseException:
