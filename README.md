@@ -20,3 +20,5 @@ newer package versions might work.
 
 
 Cleaner Code will be added soon
+
+The dataset used in the work can be found at https://archive.materialscloud.org/record/2021.128. There are some slight changes as most aflow materials denoted as possible outliers in the hull were recalculated and some systems from the materials project were updated. For the non-mixed perovskite systems the distance to the hull was recalculated with this updated dataset.
