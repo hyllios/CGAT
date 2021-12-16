@@ -38,10 +38,11 @@ def main():
     hparams.train = False
 
     # load model
-    model = LightningModel(hparams)
-    model.load_from_checkpoint(hparams.ckp, map_location='cpu')
-    model.eval()
-    model.to('cuda')
+    # model = LightningModel(hparams)
+    # model.load_from_checkpoint(hparams.ckp)
+    # model.eval()
+    # model.to('cuda')
+    model = LightningModel.load(hparams.ckp)
 
     # declare dataframe for saving errors
     errors = pd.DataFrame(columns=['batch_ids', 'errors'])
@@ -57,8 +58,14 @@ def main():
     loader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
     for j, batch in tqdm(enumerate(loader)):
         _, _, pred, target, _ = model.evaluate(batch)
+        print(pred)
         row = {'errors': mean_absolute_error(target.cpu().numpy(), pred.cpu().numpy()),
                'batch_ids': data['batch_ids'][j][0]}
+        # print(f"\n{row['errors']}")
+        # print(pred)
+        # print(target)
+        # if j == 1:
+        #     exit(0)
         errors = errors.append(row, ignore_index=True)
 
     errors.to_csv(get_file(i, PATH + '/temp').replace('data', 'errors').replace('pickle.gz', 'csv'))

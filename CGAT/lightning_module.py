@@ -6,7 +6,7 @@ import importlib
 from .lambs import JITLamb
 import numpy as np
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 import torch
 import torch.nn as nn
@@ -401,6 +401,21 @@ class LightningModel(LightningModule):
             **params)
         print('length of test_subset: {}'.format(len(self.test_set)))
         return test_generator
+
+    @classmethod
+    def load(cls, path_to_checkpoint: str, train: bool = False):
+        checkpoint = torch.load(path_to_checkpoint)
+        hparams = Namespace()
+        hparams.__dict__ = checkpoint['hyper_parameters']
+        hparams.train = train
+        model = cls(hparams)
+        model.load_state_dict(checkpoint['state_dict'])
+        model.to('cuda')
+        if not train:
+            model.eval()
+
+        return model
+
 
     @staticmethod
     def add_model_specific_args(parent_parser: ArgumentParser = None) -> ArgumentParser:  # pragma: no-cover
