@@ -69,7 +69,10 @@ class CompositionData(Dataset):
         elements = self.data['comps'][idx]
         if isinstance(elements, str):
             pattern = re.compile(r'([a-z]+)(\d+)', re.IGNORECASE)
-            matches = pattern.findall(self.data['batch_comp'][idx])
+            try:
+                matches = pattern.findall(self.data['batch_comp'][idx])
+            except TypeError:
+                matches = pattern.findall(self.data['batch_comp'][idx][0])
             elements = []
             for el, count in matches:
                 for _ in range(int(count)):
