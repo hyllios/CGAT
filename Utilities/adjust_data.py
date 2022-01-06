@@ -41,11 +41,12 @@ def remove_batch_ids(data: dict, batch_ids: set, inplace: bool = True, modify_ba
     for i in indices_to_remove:
         ids.pop(i)
     new_data['batch_ids'] = ids
-    new_data['comps'] = np.delete(data['comps'], indices_to_remove)
+    new_data['batch_comp'] = np.delete(data['batch_comp'], indices_to_remove)
     if not inplace:
         new_data['target'] = {}
     for target in data['target']:
         new_data['target'][target] = np.delete(data['target'][target], indices_to_remove)
+    new_data['comps'] = np.delete(data['comps'], indices_to_remove)
 
     return new_data
 
