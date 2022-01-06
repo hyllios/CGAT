@@ -29,7 +29,7 @@ def remove_batch_ids(data: dict, batch_ids: set, inplace: bool = True, modify_ba
     for i, batch_id in enumerate(data['batch_ids']):
         if batch_id[0] in batch_ids:
             indices_to_remove.append(i)
-            batch_ids.remove(batch_id)
+            batch_ids.remove(batch_id[0])
     # reverse list of indices to enable easy removing of items of a list by consecutive pops
     indices_to_remove.reverse()
     if inplace:
@@ -73,11 +73,11 @@ def load(path: str):
 
 
 def save(data, path):
-    pickle.dump(data, path)
+    pickle.dump(data, gz.open(path, 'wb'))
 
 
 def main():
-    paths = ['./active_learning/random_sample.pickle.gz']
+    paths = ['./active_learning/sample/random_sample.pickle.gz']
     paths.extend((f'./active_learning/val/val_data_{i * 10000}_{(i + 1) * 10000}.pickle.gz' for i in range(29)))
     paths.extend((f'./active_learning/test/test_data_{i * 10000}_{(i + 1) * 10000}.pickle.gz' for i in range(29)))
     batch_ids = get_batch_ids(paths)
