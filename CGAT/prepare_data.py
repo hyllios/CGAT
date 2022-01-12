@@ -13,11 +13,10 @@ from torch.utils.data import Dataset, DataLoader
 
 
 def build_dataset_prepare(data,
-                          target_property='e_above_hull',
-                          id='layered_perovskites'):
-    """Use to calculate features for lists of pickle and gzipped ComputedEntry pickles, 
-    returns dictionary with all necessary inputs. Use for lists with all materials having 
-    the same number of atoms"""
+                          target_property="test",
+                          fea_path = "../embeddings/matscholar-embedding.json",max_neighbor_number=24):
+    """Use to calculate features for lists of pickle and gzipped ComputedEntry pickles (either a path to the file or the file directly), returns dictionary with all necessary inputs. If the data has no target values the target values are set to -1e8
+    If you want to have multiple target properties enter a list of strings (does not work if no target values are available"""
 
     def tensor2numpy(l):
         """recursively convert torch Tensors into numpy arrays"""
@@ -27,12 +26,24 @@ def build_dataset_prepare(data,
             return l
         elif isinstance(l, list) or isinstance(l, tuple):
             return np.asarray([tensor2numpy(i) for i in l])
+        elif isinstance(l, dict):
+            npdict = {}
+            for name, val in l.items():
+                npdict[name]= tensor2numpy(val) 
+            return npdict
         else:
             return None # this will give an error later on
-    
-    d = CompositionDataPrepare(data=data,
-                               fea_path="matscholar-embedding.json",
-                               target_property=target_property)
+    if isinstance(data,str):
+        if 'gz' in data:
+            data=pickle.load(gz.open(data,'rb'))
+        else:
+            data=pickle.load(open(data,'rb'))
+    else:
+        pass
+        
+    d = CompositionDataPrepare(data,
+                               fea_path=fea_path,
+                               target_property=target_property, max_neighbor_number=max_neighbor_number)
     loader = DataLoader(d, batch_size=1)
     
     input1_ = []
@@ -40,7 +51,12 @@ def build_dataset_prepare(data,
     input3_ = []
     comps_ = []
     batch_comp_ = []
-    target_ = []
+    if type(target_property)==list:
+        target_ = {}
+        for name in target_property:
+            target_[name] = []
+    else:
+        target_ = []
     batch_ids_=[]
     
     for input_, target, batch_comp, batch_ids in loader:
@@ -48,7 +64,11 @@ def build_dataset_prepare(data,
         comps_.append(input_[1])
         input2_.append(input_[2])
         input3_.append(input_[3])
-        target_.append(target)
+        if isinstance(target_property,list):
+            for name in target_property:
+                target_[name].append(target[name])
+        else:
+            target_.append(target)
         batch_comp_.append(batch_comp)
         batch_ids_.append(batch_ids)
         
@@ -58,10 +78,16 @@ def build_dataset_prepare(data,
 
     n  = input1_[0].shape[0]
     shape = input1_.shape
+    try:
+        input1_ = np.reshape(input1_,(1, shape[0], n, max_neighbor_number))
+        input2_ = np.reshape(input2_,(1, shape[0], n, max_neighbor_number)) 
+        input3_ = np.reshape(input3_,(1, shape[0], n, max_neighbor_number)) 
+    
+    except:
+        input1_=np.asarray(input1_)
+        input2_=np.asarray(input2_)
+        input3_=np.asarray(input3_)
 
-    input1_ = np.reshape(input1_,(1, shape[0], n, 24))
-    input2_ = np.reshape(input2_,(1, shape[0], n, 24)) 
-    input3_ = np.reshape(input3_,(1, shape[0], n, 24)) 
     inputs_ = np.vstack((input1_, input2_, input3_))
 
     return {'input': inputs_,
@@ -81,6 +107,7 @@ class CompositionDataPrepare(Dataset):
         self.data = data
         print(len(self.data))
         self.radius =radius
+        self.radius =radius
         self.max_num_nbr = max_neighbor_number
         self.target_property = target_property
         assert os.path.exists(fea_path), "{} does not exist!".format(fea_path)
@@ -91,7 +118,10 @@ class CompositionDataPrepare(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        cry_id ='ml_perovskites'
+        try:
+            cry_id = self.data[idx].data['id']
+        except:
+            cry_id = 'unknown'
         composition = self.data[idx].composition.formula
         try:
             crystal = self.data[idx].structure
@@ -99,13 +129,16 @@ class CompositionDataPrepare(Dataset):
             crystal = self.data[idx]
         elements = [element.specie.symbol  for element in crystal]
         try:
-            if(type(self.target_property)==tuple):
+            if isinstance(self.target_property,tuple):
                 target = self.data[idx].as_dict()[self.target_property[0]][self.target_property[1]]
+            elif isinstance(self.target_property,list):
+                target = {}
+                for name in self.target_property:
+                    target[name] = self.data[idx].data[name]/len(crystal.sites)
             else:
-                target = self.data[idx].data[self.target_property]
+                target = self.data[idx].data[self.target_property]/len(crystal.sites)
         except:
-            target= 0.0
-        target = target/len(crystal.sites)
+            target=-1e8
             
         all_nbrs = crystal.get_all_neighbors(self.radius, include_index=True)
         all_nbrs = [sorted(nbrs, key=lambda x: x[1])[0:self.max_num_nbr] for nbrs in all_nbrs]
@@ -148,7 +181,7 @@ class CompositionDataPrepare(Dataset):
             self_fea_idx.append(self_fea_idx_sub)
         return (nbr_fea, elements, self_fea_idx, nbr_fea_idx), \
                target, composition, cry_id
-
+               
     def get_targets(self, idx1, idx2):
         target = []
         l=[]
@@ -344,3 +377,7 @@ class Normalizer(object):
     def load_state_dict(self, state_dict):
         self.mean = state_dict["mean"].cpu()
         self.std = state_dict["std"].cpu()
+
+if __name__ == "__main__":
+    file = sys.argv[1]
+    test = build_dataset_prepare(file)
