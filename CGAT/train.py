@@ -11,7 +11,7 @@ import numpy as np
 import torch
 
 import pytorch_lightning as pl
-from lightning_module import LightningModel
+from .lightning_module import LightningModel
 from pytorch_lightning.loggers.tensorboard import TensorBoardLogger
 
 SEED = 1
@@ -27,9 +27,10 @@ def main(hparams):
     # initialize model
     model = LightningModel(hparams)
     # definte path for model checkpoints and tensorboard 
-    name = "runs/f-{s}_t-" + "{date:%d-%m-%Y_%H:%M:%S}".format(
+    name = "runs/f-{s}_t-{date:%Y-%m-%d_%H-%M-%S}".format(
         date=datetime.datetime.now(),
         s=hparams.seed)
+
     # initialize logger                                            
     logger = TensorBoardLogger("tb_logs", name=name)
     # define checkpoint callback
@@ -39,18 +40,18 @@ def main(hparams):
         save_top_k=1,
         verbose=True,
         monitor='val_mae',
-        mode='min',
-        prefix='')
+        mode='min')
+        # prefix='')
 
     print('the model will train on the following gpus:', [hparams.first_gpu + el for el in range(hparams.gpus)])
     if hparams.ckp == '':
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
             gpus=[hparams.first_gpu + el for el in range(hparams.gpus)],
-            distributed_backend=hparams.distributed_backend,
-            amp_backend='native',
+            strategy=hparams.distributed_backend,
+            amp_backend='apex',
             amp_level=hparams.amp_optimization,
-            checkpoint_callback=checkpoint_callback,
+            callbacks=[checkpoint_callback],
             logger=logger,
             check_val_every_n_epoch=2,
             accumulate_grad_batches=hparams.acc_batches,
@@ -59,10 +60,10 @@ def main(hparams):
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
             gpus=hparams.gpus,
-            distributed_backend=hparams.distributed_backend,
-            amp_backend='native',
+            strategy=hparams.distributed_backend,
+            amp_backend='apex',
             amp_level=hparams.amp_optimization,
-            checkpoint_callback=checkpoint_callback,
+            callbacks=[checkpoint_callback],
             logger=logger,
             check_val_every_n_epoch=2,
             resume_from_checkpoint=hparams.ckp,

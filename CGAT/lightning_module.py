@@ -44,7 +44,9 @@ class LightningModel(LightningModule):
         # initialization of mean and standard deviation of the target data (needed for reloading without recalculation)
         self.mean = torch.nn.parameter.Parameter(torch.zeros(1), requires_grad=False)
         self.std = torch.nn.parameter.Parameter(torch.zeros(1), requires_grad=False)
-        self.hparams = hparams
+
+        # self.hparams = hparams
+        self.save_hyperparameters(hparams)
         # datasets are loaded for training or testing not needed in production
         if self.hparams.train:
             datasets = []
@@ -415,7 +417,6 @@ class LightningModel(LightningModule):
             model.eval()
 
         return model
-
 
     @staticmethod
     def add_model_specific_args(parent_parser: ArgumentParser = None) -> ArgumentParser:  # pragma: no-cover
