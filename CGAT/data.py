@@ -10,26 +10,14 @@ from torch.utils.data import Dataset
 import pickle
 from roost_message import LoadFeaturiser
 
-
-class CompositionData(Dataset):
+class CompositionData_idx(Dataset):
     """
     The CompositionData dataset is a wrapper for a dataset data points are
     automatically constructed from composition strings.
     """
 
-    def __init__(self, data, fea_path, max_neighbor_number=12, target='e_above_hull'):
+    def __init__(self, data, fea_path, radius=8.0, max_neighbor_number=12, target='e_above_hull'):
         """
-        Constructs dataset
-        Args:
-            data: expects either a gzipped pickle of the dictionary or a dictionary
-                  with the keys 'batch_comp', 'comps', 'target', 'input'
-            fea_path:
-                  path  to file containing the element embedding information
-            max_neighbor_number:
-                  maximum number of neighbors used during message passing
-            target:
-                  name of training/validation/testing target
-        Returns:
         """
 
         if isinstance(data, str):
@@ -39,6 +27,7 @@ class CompositionData(Dataset):
         else:
             self.data = data
 
+        self.radius = radius
         self.max_num_nbr = max_neighbor_number
         if(self.data['input'].shape[0] > 3):
             self.format = 1
@@ -50,19 +39,46 @@ class CompositionData(Dataset):
         self.target = target
 
     def __len__(self):
-        """Returns length of dataset"""
         return len(self.data['target'][self.target])
 
     @functools.lru_cache(maxsize=None)  # Cache loaded structures
     def __getitem__(self, idx):
+        return self.data['batch_ids'][idx]
+
+
+class CompositionData(Dataset):
+    """
+    The CompositionData dataset is a wrapper for a dataset data points are
+    automatically constructed from composition strings.
+    """
+
+    def __init__(self, data, fea_path, radius=8.0, max_neighbor_number=12, target='e_above_hull'):
         """
-        Returns features for CGAT for the crystal structure with the index idx in self.data
-        Args:
-            idx: index of structure
-        Returns:
-            Tuple of torch_geometric Data object representing the graph of the structure and the input features for
-             Roost (Composition Graph)
         """
+
+        if isinstance(data, str):
+            assert os.path.exists(data), \
+                "{} does not exist!".format(data)
+            self.data = pickle.load(gz.open(data, "rb"))
+        else:
+            self.data = data
+
+        self.radius = radius
+        self.max_num_nbr = max_neighbor_number
+        if(self.data['input'].shape[0] > 3):
+            self.format = 1
+        else:
+            self.format = 0
+        assert os.path.exists(fea_path), "{} does not exist!".format(fea_path)
+        self.atom_features = LoadFeaturiser(fea_path)
+        self.atom_fea_dim = self.atom_features.embedding_size
+        self.target = target
+
+    def __len__(self):
+        return len(self.data['target'][self.target])
+
+    @functools.lru_cache(maxsize=None)  # Cache loaded structures
+    def __getitem__(self, idx):
         composition = self.data['batch_comp'][idx]
         elements = self.data['comps'][idx]
         try:
@@ -107,11 +123,11 @@ class CompositionData(Dataset):
             target = self.data['target'][self.target][idx]
             atom_fea = torch.Tensor(atom_fea)
             nbr_fea = torch.LongTensor(
-                self.data['input'][0][idx][:, 0:self.max_num_nbr].flatten())
+                self.data['input'][0][idx][:, 0:self.max_num_nbr].flatten().astype(int))
             nbr_fea_idx = torch.LongTensor(
-                self.data['input'][2][idx][:, 0:self.max_num_nbr].flatten())
+                self.data['input'][2][idx][:, 0:self.max_num_nbr].flatten().astype(int))
             self_fea_idx = torch.LongTensor(
-                self.data['input'][1][idx][:, 0:self.max_num_nbr].flatten())
+                self.data['input'][1][idx][:, 0:self.max_num_nbr].flatten().astype(int))
             target = torch.Tensor([target])
         else:
             try:
@@ -130,5 +146,9 @@ class CompositionData(Dataset):
             self_fea_idx = torch.LongTensor(
                 self.data['input'][idx][1][:, 0:self.max_num_nbr].flatten())
             target = torch.Tensor([target])
-        return Data(x=atom_fea, edge_index=torch.stack((self_fea_idx, nbr_fea_idx)), edge_attr=nbr_fea,
+        if self.target!='volume':
+            return Data(x=atom_fea, edge_index=torch.stack((self_fea_idx, nbr_fea_idx)), edge_attr=nbr_fea,
                     y=target * N), (atom_weights_c, atom_fea_c, self_fea_idx_c, nbr_fea_idx_c)
+        else:
+            return Data(x=atom_fea, edge_index=torch.stack((self_fea_idx, nbr_fea_idx)), edge_attr=nbr_fea,
+                y=target), (atom_weights_c, atom_fea_c, self_fea_idx_c, nbr_fea_idx_c)
