@@ -19,8 +19,7 @@ def main():
     errors = pd.DataFrame(columns=['batch_ids', 'errors'])
 
     print('Reading error files...')
-    for i in trange(283):
-        errors = errors.append(pd.read_csv(get_csv(i, PATH)), ignore_index=True)
+    errors = pd.concat([pd.read_csv(get_csv(i, PATH)) for i in trange(283)], ignore_index=True)
 
     N = 25000
     # find the first N samples with the largest errors
