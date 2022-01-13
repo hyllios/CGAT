@@ -13,10 +13,10 @@ from torch.utils.data import Dataset, DataLoader
 
 
 def build_dataset_prepare(data,
-                          target_property="test",
+                          target_property=["e_above_hull_new"],
                           fea_path = "../embeddings/matscholar-embedding.json",max_neighbor_number=24):
     """Use to calculate features for lists of pickle and gzipped ComputedEntry pickles (either a path to the file or the file directly), returns dictionary with all necessary inputs. If the data has no target values the target values are set to -1e8
-    If you want to have multiple target properties enter a list of strings (does not work if no target values are available"""
+    Always enter list of target properties"""
 
     def tensor2numpy(l):
         """recursively convert torch Tensors into numpy arrays"""
@@ -25,7 +25,7 @@ def build_dataset_prepare(data,
         elif isinstance(l, str) or isinstance(l, int) or isinstance(l, float):
             return l
         elif isinstance(l, list) or isinstance(l, tuple):
-            return np.asarray([tensor2numpy(i) for i in l])
+            return np.asarray([tensor2numpy(i) for i in l], dtype=object)
         elif isinstance(l, dict):
             npdict = {}
             for name, val in l.items():
@@ -43,7 +43,8 @@ def build_dataset_prepare(data,
         
     d = CompositionDataPrepare(data,
                                fea_path=fea_path,
-                               target_property=target_property, max_neighbor_number=max_neighbor_number)
+                               target_property=target_property,
+                               max_neighbor_number=max_neighbor_number)
     loader = DataLoader(d, batch_size=1)
     
     input1_ = []
@@ -71,22 +72,22 @@ def build_dataset_prepare(data,
             target_.append(target)
         batch_comp_.append(batch_comp)
         batch_ids_.append(batch_ids)
-        
     input1_ = tensor2numpy(input1_)
     input2_ = tensor2numpy(input2_)
     input3_ = tensor2numpy(input3_)
 
     n  = input1_[0].shape[0]
     shape = input1_.shape
-    try:
-        input1_ = np.reshape(input1_,(1, shape[0], n, max_neighbor_number))
-        input2_ = np.reshape(input2_,(1, shape[0], n, max_neighbor_number)) 
-        input3_ = np.reshape(input3_,(1, shape[0], n, max_neighbor_number)) 
-    
-    except:
-        input1_=np.asarray(input1_)
-        input2_=np.asarray(input2_)
-        input3_=np.asarray(input3_)
+    if len(shape)>2:
+        i1 = np.empty(shape=(1,shape[0]),dtype=object)
+        i2 = np.empty(shape=(1,shape[0]),dtype=object)
+        i3 = np.empty(shape=(1,shape[0]),dtype=object)
+        i1[:,:,] = [[input1_[l] for l in range(shape[0])]]
+        input1_ = i1
+        i2[:,:,] = [[input2_[l] for l in range(shape[0])]]
+        input2_ = i2
+        i3[:,:,] = [[input3_[l] for l in range(shape[0])]]
+        input3_ = i3
 
     inputs_ = np.vstack((input1_, input2_, input3_))
 
@@ -105,7 +106,7 @@ class CompositionDataPrepare(Dataset):
         """
         """
         self.data = data
-        print(len(self.data))
+        print("{} systems".format(len(self.data)))
         self.radius =radius
         self.radius =radius
         self.max_num_nbr = max_neighbor_number
@@ -129,16 +130,14 @@ class CompositionDataPrepare(Dataset):
             crystal = self.data[idx]
         elements = [element.specie.symbol  for element in crystal]
         try:
-            if isinstance(self.target_property,tuple):
-                target = self.data[idx].as_dict()[self.target_property[0]][self.target_property[1]]
-            elif isinstance(self.target_property,list):
-                target = {}
-                for name in self.target_property:
-                    target[name] = self.data[idx].data[name]/len(crystal.sites)
-            else:
-                target = self.data[idx].data[self.target_property]/len(crystal.sites)
+            target = {}
+            for name in self.target_property:
+               target[name] = self.data[idx].data[name]/len(crystal.sites)
         except:
-            target=-1e8
+            target = {}
+            print('Warning no target value')
+            for name in self.target_property:        
+                target[name] =-1e8
             
         all_nbrs = crystal.get_all_neighbors(self.radius, include_index=True)
         all_nbrs = [sorted(nbrs, key=lambda x: x[1])[0:self.max_num_nbr] for nbrs in all_nbrs]
