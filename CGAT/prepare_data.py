@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 
 
 def build_dataset_prepare(data,
-                          target_property=["e_above_hull_new"],
+                          target_property=["e_above_hull_new"], radius=18.0,
                           fea_path = "../embeddings/matscholar-embedding.json",max_neighbor_number=24):
     """Use to calculate features for lists of pickle and gzipped ComputedEntry pickles (either a path to the file or the file directly), returns dictionary with all necessary inputs. If the data has no target values the target values are set to -1e8
     Always enter list of target properties"""
@@ -44,7 +44,8 @@ def build_dataset_prepare(data,
     d = CompositionDataPrepare(data,
                                fea_path=fea_path,
                                target_property=target_property,
-                               max_neighbor_number=max_neighbor_number)
+                               max_neighbor_number=max_neighbor_number,
+                               radius = radius)
     loader = DataLoader(d, batch_size=1)
     
     input1_ = []
@@ -61,6 +62,8 @@ def build_dataset_prepare(data,
     batch_ids_=[]
     
     for input_, target, batch_comp, batch_ids in loader:
+        if len(input_)==1: #remove compounds with not enough neighbors
+            continue
         input1_.append(input_[0])
         comps_.append(input_[1])
         input2_.append(input_[2])
@@ -135,7 +138,7 @@ class CompositionDataPrepare(Dataset):
                target[name] = self.data[idx].data[name]/len(crystal.sites)
         except:
             target = {}
-            print('Warning no target value')
+            warnings.warn('no target property')
             for name in self.target_property:        
                 target[name] =-1e8
             
@@ -146,23 +149,10 @@ class CompositionDataPrepare(Dataset):
         for site, nbr in enumerate(all_nbrs):
             nbr_fea_idx_sub, nbr_fea_sub, self_fea_idx_sub= [],[],[]
             if len(nbr) < self.max_num_nbr:
-                warnings.warn('{} not find enough neighbors to build graph. '
+                warnings.warn('{} does not contain enough neighbors in the cutoff to build the full graph. '
                               'If it happens frequently, consider increase '
-                              'radius.'.format(cry_id))
-                for n in range(len(nbr)):
-                    self_fea_idx_sub.append(site)
-                for j in range(len(nbr)):
-                    nbr_fea_idx_sub.append(nbr[j][2])
-                index = 1
-                try:
-                    dist = nbr[0][1]
-                except:
-                    print('no neighbor', cry_id)
-                for el in nbr:
-                    if(el[1]>dist+1e-8):
-                        dist = el[1]
-                        index+=1
-                    nbr_fea_sub.append(index)
+                              'radius. Compound is not added to the feature set'.format(cry_id))
+                return (torch.ones(1)),torch.ones(1),torch.ones(1),torch.ones(1) #fake input will be removed in build_dataset_prepare
             else:
                 for n in range(self.max_num_nbr):
                     self_fea_idx_sub.append(site)
@@ -380,3 +370,4 @@ class Normalizer(object):
 if __name__ == "__main__":
     file = sys.argv[1]
     test = build_dataset_prepare(file)
+    pickle.dump(test, gz.open('test_all_same_new.pickle.gz','wb'))
