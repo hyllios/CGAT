@@ -10,50 +10,27 @@ from torch.utils.data import Dataset
 import pickle
 from roost_message import LoadFeaturiser
 
-class CompositionData_idx(Dataset):
-    """
-    The CompositionData dataset is a wrapper for a dataset data points are
-    automatically constructed from composition strings.
-    """
-
-    def __init__(self, data, fea_path, radius=8.0, max_neighbor_number=12, target='e_above_hull'):
-        """
-        """
-
-        if isinstance(data, str):
-            assert os.path.exists(data), \
-                "{} does not exist!".format(data)
-            self.data = pickle.load(gz.open(data, "rb"))
-        else:
-            self.data = data
-
-        self.radius = radius
-        self.max_num_nbr = max_neighbor_number
-        if(self.data['input'].shape[0] > 3):
-            self.format = 1
-        else:
-            self.format = 0
-        assert os.path.exists(fea_path), "{} does not exist!".format(fea_path)
-        self.atom_features = LoadFeaturiser(fea_path)
-        self.atom_fea_dim = self.atom_features.embedding_size
-        self.target = target
-
-    def __len__(self):
-        return len(self.data['target'][self.target])
-
-    @functools.lru_cache(maxsize=None)  # Cache loaded structures
-    def __getitem__(self, idx):
-        return self.data['batch_ids'][idx]
-
 
 class CompositionData(Dataset):
     """
-    The CompositionData dataset is a wrapper for a dataset data points are
-    automatically constructed from composition strings.
+    The CompositionData dataset is a wrapper for a dataset 
     """
 
     def __init__(self, data, fea_path, radius=8.0, max_neighbor_number=12, target='e_above_hull'):
         """
+                Constructs dataset
+        Args:
+            data: expects either a gzipped pickle of the dictionary or a dictionary
+                  with the keys 'batch_comp', 'comps', 'target', 'input'
+            fea_path:
+                  path  to file containing the element embedding information
+            radius:
+                  cutoff radius
+            max_neighbor_number:
+                  maximum number of neighbors used during message passing
+            target:
+                  name of training/validation/testing target
+        Returns:
         """
 
         if isinstance(data, str):
@@ -75,9 +52,10 @@ class CompositionData(Dataset):
         self.target = target
 
     def __len__(self):
+        """Returns length of dataset"""
         return len(self.data['target'][self.target])
 
-    @functools.lru_cache(maxsize=None)  # Cache loaded structures
+    #@functools.lru_cache(maxsize=None)  # Cache loaded structures
     def __getitem__(self, idx):
         composition = self.data['batch_comp'][idx]
         elements = self.data['comps'][idx]
