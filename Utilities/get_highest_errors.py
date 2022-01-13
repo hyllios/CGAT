@@ -20,7 +20,7 @@ def main():
 
     print('Reading error files...')
     for i in trange(283):
-        errors = errors.append(pd.read_csv(get_csv(i, PATH), index_col=0), ignore_index=True)
+        errors = errors.append(pd.read_csv(get_csv(i, PATH)), ignore_index=True)
 
     N = 25000
     # find the first N samples with the largest errors

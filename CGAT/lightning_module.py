@@ -206,7 +206,7 @@ class LightningModel(LightningModule):
         pred = self.denorm(output.data)
         return output, log_std, pred, target, target_norm
 
-    def forward(self, batch, batch_idx):
+    def forward(self, batch, batch_idx=None):
         """
         Use for prediction with a dataloader
          Args:
