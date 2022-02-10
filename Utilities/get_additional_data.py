@@ -30,9 +30,11 @@ def main():
         dir = os.path.join(new_dir, get_composition(file))
         if not os.path.exists(dir):
             os.mkdir(dir)
-        json_data = json.load(bz2.open(file, 'rb'))
+        with bz2.open(file, 'rb') as f:
+            json_data = json.load(f)
         data = list(map(ComputedEntry.from_dict, json_data['entries']))
-        pickle.dump(data, gz.open(os.path.join(dir, f'unprepared-{get_file_name(file)}.pickle.gz'), 'wb'))
+        with gz.open(os.path.join(dir, f'unprepared-{get_file_name(file)}.pickle.gz'), 'wb') as f:
+            pickle.dump(data, f)
 
 
 if __name__ == '__main__':
