@@ -12,7 +12,7 @@ import pickle
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-from roost_message import LoadFeaturiser
+from .roost_message import LoadFeaturiser
 
 
 def build_dataset_prepare(data,
@@ -108,7 +108,10 @@ class CompositionDataPrepare(Dataset):
     def __init__(self, data, fea_path, target_property='e-form', radius=18.0, max_neighbor_number=24):
         """
         """
-        self.data = pickle.load(gz.open(data, 'rb'))
+        if isinstance(data, str):
+            self.data = pickle.load(gz.open(data, 'rb'))
+        else:
+            self.data = data
         self.radius = radius
         self.max_num_nbr = max_neighbor_number
         self.target_property = target_property
@@ -376,13 +379,13 @@ class Normalizer(object):
         self.std = state_dict["std"].cpu()
 
 
-def main(file: str = 'data_0_10000.pickle.gz', source='../unprepared_volume_data', target='../data', target_file: str = None):
+def main(file: str = 'data_0_10000.pickle.gz', source='../unprepared_volume_data', target='../data',
+         target_file: str = None):
     test = build_dataset_prepare(f'{source}/{file}')
     if target_file is None:
         pickle.dump(test, gz.open(f'{target}/{file}', 'wb'))
     else:
         pickle.dump(test, gz.open(f'{target}/{target_file}', 'wb'))
-
 
 
 if __name__ == '__main__':
