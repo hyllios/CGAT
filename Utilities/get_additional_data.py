@@ -32,7 +32,7 @@ def main():
             os.mkdir(dir)
         json_data = json.load(bz2.open(file, 'rb'))
         data = list(map(ComputedEntry.from_dict, json_data['entries']))
-        pickle.dump(data, gz.open(os.path.join(dir), f'unprepared-{get_file_name(file)}.pickle.gz'))
+        pickle.dump(data, gz.open(os.path.join(dir, f'unprepared-{get_file_name(file)}.pickle.gz'), 'wb'))
 
 
 if __name__ == '__main__':
