@@ -5,7 +5,7 @@ import re
 import bz2
 import gzip as gz
 import json
-from pymatgen.entries.computed_entries import ComputedEntry
+from pymatgen.entries.computed_entries import ComputedStructureEntry
 from tqdm import tqdm
 
 
@@ -32,7 +32,7 @@ def main():
             os.mkdir(dir)
         with bz2.open(file, 'rb') as f:
             json_data = json.load(f)
-        data = list(map(ComputedEntry.from_dict, json_data['entries']))
+        data = list(map(ComputedStructureEntry.from_dict, json_data['entries']))
         with gz.open(os.path.join(dir, f'unprepared-{get_file_name(file)}.pickle.gz'), 'wb') as f:
             pickle.dump(data, f)
 
