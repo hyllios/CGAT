@@ -20,8 +20,7 @@ def get_file_name(file: str):
 
 
 def main():
-    # PATH = "/nfs/data-019/marques/data/material_prediction_CGAT/ternaries"
-    PATH = "pickle-test"
+    PATH = "/nfs/data-019/marques/data/material_prediction_CGAT/ternaries"
     files = glob.glob(os.path.join(PATH, '*', 'annotated', '*.json.bz2'))
     print(f"Found {len(files)} files.")
     new_dir = "additional_data"
