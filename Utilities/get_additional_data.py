@@ -20,8 +20,9 @@ def get_file_name(file: str):
 
 
 def main():
-    PATH = "/nfs/data-019/marques/data/material_prediction_CGAT/ternaries"
-    files = glob.glob(os.path.join(PATH, '*', 'annotated', '*.json.bz2'))
+    PATH = "/nfs/data-019/marques/data/material_prediction_CGAT/{comp}"
+    files = glob.glob(os.path.join(PATH.format(comp='binaries'), '*', 'annotated', '*.json.bz2')) + \
+            glob.glob(os.path.join(PATH.format(comp='ternaries'), '*', 'annotated', '*.json.bz2'))
     print(f"Found {len(files)} files.")
     new_dir = "additional_data"
     if not os.path.exists(new_dir):
