@@ -10,8 +10,8 @@ from CGAT.prepare_volume_data import build_dataset_prepare
 
 
 def get_composition(file: str):
-    pattern = re.compile(r'(A\d+B\d+C\d+)')
-    return pattern.search(file)[1]
+    pattern = re.compile(r'[A-Z]\d+')
+    return "".join(pattern.findall(file))
 
 
 def get_file_name(file: str):
