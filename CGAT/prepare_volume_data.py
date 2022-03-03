@@ -379,20 +379,19 @@ class Normalizer(object):
         self.std = state_dict["std"].cpu()
 
 
-def main(file: str = 'data_0_10000.pickle.gz', source='../unprepared_volume_data', target='../data',
-         target_file: str = None):
-    test = build_dataset_prepare(f'{source}/{file}')
-    if target_file is None:
-        pickle.dump(test, gz.open(f'{target}/{file}', 'wb'))
-    else:
-        pickle.dump(test, gz.open(f'{target}/{target_file}', 'wb'))
-
-
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--file', default='data_0_10000.pickle.gz')
     parser.add_argument('--source-dir', default='unprepared_volume_data')
     parser.add_argument('--target-dir', default='data')
     parser.add_argument('--target-file', default=None)
     args = parser.parse_args()
-    main(file=args.file, source=args.source_dir, target=args.target_dir, target_file=args.target_file)
+    test = build_dataset_prepare(f'{args.source}/{args.file}')
+    if args.target_file is None:
+        pickle.dump(test, gz.open(f'{args.target}/{args.file}', 'wb'))
+    else:
+        pickle.dump(test, gz.open(f'{args.target}/{args.target_file}', 'wb'))
+
+
+if __name__ == '__main__':
+    main()
