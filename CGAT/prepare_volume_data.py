@@ -388,7 +388,7 @@ def main():
     args = parser.parse_args()
     test = build_dataset_prepare(os.path.join(args.source_dir, args.file))
     if args.target_file is None:
-        pickle.dump(test, gz.open(os.path.join(args.target_dir, args.file), 'wb'))
+        pickle.dump(test, gz.open(os.path.join(args.target_dir, os.path.basename(args.file)), 'wb'))
     else:
         pickle.dump(test, gz.open(os.path.join(args.target_dir, args.target_file), 'wb'))
 
