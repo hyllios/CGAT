@@ -386,11 +386,11 @@ def main():
     parser.add_argument('--target-dir', default='data')
     parser.add_argument('--target-file', default=None)
     args = parser.parse_args()
-    test = build_dataset_prepare(f'{args.source}/{args.file}')
+    test = build_dataset_prepare(os.path.join(args.source_dir, args.file))
     if args.target_file is None:
-        pickle.dump(test, gz.open(f'{args.target}/{args.file}', 'wb'))
+        pickle.dump(test, gz.open(os.path.join(args.target_dir, args.file), 'wb'))
     else:
-        pickle.dump(test, gz.open(f'{args.target}/{args.target_file}', 'wb'))
+        pickle.dump(test, gz.open(os.path.join(args.target_dir, args.target_file), 'wb'))
 
 
 if __name__ == '__main__':
