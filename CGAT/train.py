@@ -25,7 +25,12 @@ def main(hparams):
     :param hparams:
     """
     # initialize model
-    model = LightningModel(hparams)
+    if hparams.pretrained_model is None:
+        model = LightningModel(hparams)
+    else:
+        assert os.path.isfile(hparams.pretrained_model), f"Checkpoint file {hparams.pretrained_model} does not exist!"
+        # load model from checkpoint and override old hyperparameters
+        model = LightningModel.load_from_checkpoint(hparams.pretrained_model, **vars(hparams))
     # definte path for model checkpoints and tensorboard 
     name = "runs/f-{s}_t-{date:%Y-%m-%d_%H-%M-%S}".format(
         date=datetime.datetime.now(),
@@ -119,6 +124,10 @@ def run():
                                action="store_true",
                                help="whether to train or test"
                                )
+    parent_parser.add_argument("--pretrained-model",
+                               type=str,
+                               default=None,
+                               help='path to checkpoint of pretrained model for transfer learning')
 
     # each LightningModule defines arguments relevant to it
     parser = LightningModel.add_model_specific_args(parent_parser)
