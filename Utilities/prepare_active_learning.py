@@ -22,15 +22,18 @@ def main():
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
 
+    print("Loading test and validation data...")
     test_val_data = load(os.path.join(data_dir, 'indices', 'test_and_val_idx.pickle.gz'))
     test_ids = set([batch_id for batch_id, in test_val_data['test_batch_ids']])
     val_ids = set([batch_id for batch_id in test_val_data['val_batch_ids']])
 
+    print("Loading training data...")
     used_data = load(used_data_path)
     used_ids = set([batch_id for batch_id, in used_data['batch_ids']])
 
     ids = test_ids | val_ids | used_ids
 
+    print("Gathering remaining data...")
     for file in tqdm(glob(os.path.join(data_dir, '*.pickle.gz'))):
         data = load(file)
         to_remove = set()
@@ -42,3 +45,7 @@ def main():
 
         remove_batch_ids(data, to_remove)
         save(data, os.path.join(target_dir, os.path.basename(file)))
+
+
+if __name__ == '__main__':
+    main()
