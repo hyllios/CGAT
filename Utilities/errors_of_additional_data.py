@@ -8,6 +8,12 @@ import glob
 from get_additional_data import get_composition
 from tqdm import tqdm
 import numpy as np
+import re
+
+
+def get_seed(path):
+    pattern = re.compile(r'f-(\d+)_')
+    return int(pattern.search(path).group(1))
 
 
 def main():
@@ -26,9 +32,10 @@ def main():
     #                                       "runs",
     #                                       "{run}",
     #                                       "*.ckpt").format(run=run))[0] for run in runs]
-    model_paths = glob.glob(os.path.join('new_active_learning', 'checkpoints', '*', '*.ckpt'))
-    df = pd.DataFrame(columns=['comp', 'run', 'mae'])
-    for i, model_path in enumerate(tqdm(model_paths)):
+    model_paths = sorted(glob.glob(os.path.join('new_active_learning', 'checkpoints', '*', '*.ckpt')), key=get_seed)
+    seeds = list(map(get_seed, model_paths))
+    df = pd.DataFrame(columns=['comp', 'seed', 'mae'])
+    for i, model_path in zip(seeds, tqdm(model_paths)):
         model = LightningModel.load(model_path)
 
         for path in tqdm(data_paths):
@@ -45,7 +52,7 @@ def main():
                 _, _, pred, target, _ = model.evaluate(batch)
                 errors.append(mean_absolute_error(target.cpu().numpy(), pred.cpu().numpy()))
             df.loc[len(df)] = [comp, i, np.mean(errors)]
-        df.to_csv('additional_data/errors.csv', index=False)
+        df.to_csv('new_active_learning/errors.csv', index=False)
 
 
 if __name__ == '__main__':
