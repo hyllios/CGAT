@@ -45,7 +45,7 @@ def main():
                 _, _, pred, target, _ = model.evaluate(batch)
                 errors.append(mean_absolute_error(target.cpu().numpy(), pred.cpu().numpy()))
             df.loc[len(df)] = [comp, i, np.mean(errors)]
-    df.to_csv('additional_data/errors.csv', index=False)
+        df.to_csv('additional_data/errors.csv', index=False)
 
 
 if __name__ == '__main__':
