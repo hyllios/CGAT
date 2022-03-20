@@ -36,7 +36,8 @@ def main():
     seeds = list(map(get_seed, model_paths))
     df = pd.DataFrame(columns=['comp', 'seed', 'mae'])
     for i, model_path in zip(seeds, tqdm(model_paths)):
-        model = LightningModel.load(model_path)
+        model = LightningModel.load_from_checkpoint(model_path, train=False)
+        model = model.cuda()
 
         for path in tqdm(data_paths):
             dataset = CompositionData(
