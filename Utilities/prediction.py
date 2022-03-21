@@ -1,7 +1,9 @@
+import torch
+
 from CGAT.lightning_module import LightningModel, collate_fn
 from CGAT.data import CompositionData
 from torch.utils.data import DataLoader
-import pandas as pd
+import numpy as np
 import os
 import glob
 from get_additional_data import get_composition
@@ -20,8 +22,8 @@ def main():
     print(f"Found {len(data_paths)} datasets")
     model_paths = sorted(glob.glob(os.path.join('new_active_learning', 'checkpoints', '*', '*.ckpt')), key=get_seed)
     seeds = list(map(get_seed, model_paths))
-    df = pd.DataFrame(columns=['comp', 'seed', 'entry', 'prediction'])
-    for i, model_path in zip(seeds, tqdm(model_paths)):
+    # df = pd.DataFrame(columns=['comp', 'seed', 'entry', 'prediction'])
+    for seed, model_path in zip(seeds, tqdm(model_paths)):
         model = LightningModel.load_from_checkpoint(model_path, train=False)
         model = model.cuda()
 
@@ -32,12 +34,16 @@ def main():
                 max_neighbor_number=model.hparams.max_nbr,
                 target=model.hparams.target
             )
-            loader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
+            loader = DataLoader(dataset, batch_size=5000, shuffle=False, collate_fn=collate_fn)
             comp = get_composition(path)
-            for j, batch in enumerate(loader):
+            predictions = []
+            for batch in loader:
                 _, _, pred, target, _ = model.evaluate(batch)
-                df.loc[len(df)] = [comp, i, j, pred.cpu()]
-        df.to_csv('new_active_learning/predictions.csv', index=False)
+                predictions.append(pred)
+            dir = os.path.join('new_active_learning', comp)
+            if not os.path.isdir(dir):
+                os.makedirs(dir)
+            np.savetxt(os.path.join(dir, f'{seed}.txt'), torch.cat(predictions).cpu().numpy().reshape((-1,)))
 
 
 if __name__ == '__main__':
