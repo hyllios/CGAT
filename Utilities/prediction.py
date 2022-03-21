@@ -34,16 +34,19 @@ def main():
                 max_neighbor_number=model.hparams.max_nbr,
                 target=model.hparams.target
             )
-            loader = DataLoader(dataset, batch_size=5000, shuffle=False, collate_fn=collate_fn)
+            loader = DataLoader(dataset, batch_size=100, shuffle=False, collate_fn=collate_fn)
             comp = get_composition(path)
             predictions = []
+            targets = []
             for batch in loader:
                 _, _, pred, target, _ = model.evaluate(batch)
                 predictions.append(pred)
+                targets.append(target)
             dir = os.path.join('new_active_learning', comp)
             if not os.path.isdir(dir):
                 os.makedirs(dir)
             np.savetxt(os.path.join(dir, f'{seed}.txt'), torch.cat(predictions).cpu().numpy().reshape((-1,)))
+            np.savetxt(os.path.join(dir, f'target.txt'), torch.cat(targets).cpu().numpy().reshape((-1,)))
 
 
 if __name__ == '__main__':
