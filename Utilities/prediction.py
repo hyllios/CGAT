@@ -20,7 +20,8 @@ def main():
     data_paths = glob.glob(os.path.join("additional_data", "*", "*.pickle.gz"))
     assert len(data_paths) > 0
     print(f"Found {len(data_paths)} datasets")
-    model_paths = sorted(glob.glob(os.path.join('new_active_learning', 'checkpoints', '*', '*.ckpt')), key=get_seed)
+    model_paths = sorted(glob.glob(os.path.join('new_active_learning', 'checkpoints', 'e_hull', '350_000', '*', '*.ckpt')),
+                         key=get_seed)
     seeds = list(map(get_seed, model_paths))
     # df = pd.DataFrame(columns=['comp', 'seed', 'entry', 'prediction'])
     for seed, model_path in zip(seeds, tqdm(model_paths)):
@@ -38,15 +39,18 @@ def main():
             comp = get_composition(path)
             predictions = []
             targets = []
+            log_stds = []
             for batch in loader:
-                _, _, pred, target, _ = model.evaluate(batch)
+                _, log_std, pred, target, _ = model.evaluate(batch)
                 predictions.append(pred)
                 targets.append(target)
+                log_stds.append(log_std)
             dir = os.path.join('new_active_learning', comp)
             if not os.path.isdir(dir):
                 os.makedirs(dir)
             np.savetxt(os.path.join(dir, f'{seed}.txt'), torch.cat(predictions).cpu().numpy().reshape((-1,)))
             np.savetxt(os.path.join(dir, f'target.txt'), torch.cat(targets).cpu().numpy().reshape((-1,)))
+            np.savetxt(os.path.join(dir, f'log_std_{seed}.txt'), torch.cat(log_stds).cpu().numpy().reshape((-1,)))
 
 
 if __name__ == '__main__':
