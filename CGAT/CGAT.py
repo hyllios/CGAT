@@ -537,7 +537,7 @@ class CGAtNet(nn.Module):
                                              if_rezero=rezero)
 
 
-    def forward(self, batch, roost):
+    def forward(self, batch, roost, *, last_layer=True):
         """
         Forward pass
 
@@ -590,9 +590,9 @@ class CGAtNet(nn.Module):
         if(self.mean_pooling):
             crys_fea = crys_fea.view(-1, self.msg_heads, self.elem_fea_len)
             crys_fea = torch.mean(crys_fea, dim=1)
-            crys_fea = self.output_nn(crys_fea)
+            crys_fea = self.output_nn(crys_fea, last_layer=last_layer)
         else:
-            crys_fea = self.output_nn(crys_fea)
+            crys_fea = self.output_nn(crys_fea, last_layer=last_layer)
         return crys_fea
 
     def __repr__(self):

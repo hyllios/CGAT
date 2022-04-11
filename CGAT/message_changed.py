@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 from torch_scatter import scatter_max, scatter_add, \
     scatter_mean
+
 """
 MIT License
 Copyright (c) 2019-2020 Rhys Goodall
@@ -44,7 +45,7 @@ class SimpleNetwork(nn.Module):
         super(SimpleNetwork, self).__init__()
 
         dims = [input_dim] + hidden_layer_dims
-       # print(dims, output_dim)
+        # print(dims, output_dim)
         # print(dims)
 
         self.fcs = nn.ModuleList([nn.Linear(dims[i], dims[i + 1])
@@ -112,15 +113,15 @@ class ResidualNetwork(nn.Module):
 
         self.fc_out = nn.Linear(dims[-1], output_dim)
         self.if_rezero = if_rezero
-        if(self.if_rezero):
+        if (self.if_rezero):
             self.rezeros = nn.ModuleList(
                 [Rezero() for _ in range(len(dims) - 1)])
 
-    def forward(self, fea):
+    def forward(self, fea, *, last_layer=True):
         # for fc, bn, res_fc, act in zip(self.fcs, self.bns,
         #                                self.res_fcs, self.acts):
         #     fea = act(bn(fc(fea)))+res_fc(fea)
-        if(not self.if_rezero):
+        if (not self.if_rezero):
             for fc, res_fc, act in zip(self.fcs, self.res_fcs, self.acts):
                 fea = act(fc(fea)) + res_fc(fea)
         else:
@@ -128,7 +129,10 @@ class ResidualNetwork(nn.Module):
                     self.fcs, self.res_fcs, self.acts, self.rezeros):
                 fea = rez(act(fc(fea))) + res_fc(fea)
 
-        return self.fc_out(fea)
+        if last_layer:
+            return self.fc_out(fea)
+        else:
+            return fea
 
     def __repr__(self):
         return '{}'.format(self.__class__.__name__)
