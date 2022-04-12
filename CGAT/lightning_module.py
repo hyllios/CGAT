@@ -182,7 +182,7 @@ class LightningModel(LightningModule):
     # TRAINING
     # ---------------------
 
-    def evaluate(self, batch, *, last_layer=True):
+    def evaluate(self, batch, *, last_layer=True, return_graph_embedding=False):
         """
         calculates normalized and unnormalized output of the network. 
         Batch object should include input for CGAT and Roost
@@ -200,6 +200,8 @@ class LightningModel(LightningModule):
         batch = (Batch.from_data_list(batch)).to(device)
         b_comp = collate_batch(b_comp)
         b_comp = (tensor.to(device) for tensor in b_comp)
+        if return_graph_embedding:
+            return self.model(batch, b_comp, return_graph_embedding=True)
         if last_layer:
             output, log_std = self.model(batch, b_comp).chunk(2, dim=1)
             target = batch.y.view(len(batch.y), 1)
