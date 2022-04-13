@@ -29,14 +29,11 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 
 class GPModel(gpytorch.models.ApproximateGP):
-    def __init__(self, inducing_points: torch.Tensor, cgat_model: LightningModel):
+    def __init__(self, inducing_points: torch.Tensor):
         # init base class
         distribution = gpytorch.variational.CholeskyVariationalDistribution(inducing_points.size(0))
         strategy = gpytorch.variational.VariationalStrategy(self, inducing_points, distribution)
         super(GPModel, self).__init__(strategy)
-
-        # save CGAT models, which calculates embeddings
-        self.model = cgat_model
 
         # init mean and covariance modules
         self.mean_module = gpytorch.means.ConstantMean()
@@ -46,12 +43,9 @@ class GPModel(gpytorch.models.ApproximateGP):
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
     def forward(self, batch):
-        # calculate graph embeddings of current batch
-        with torch.no_grad():
-            embedding = self.model.evaluate(batch, return_graph_embedding=True)
         # calculate means and covariances of the batch
-        mean = self.mean_module(embedding)
-        covar = self.covar_module(embedding)
+        mean = self.mean_module(batch)
+        covar = self.covar_module(batch)
         # return distribution
         return gpytorch.distributions.MultivariateNormal(mean, covar)
 
@@ -71,12 +65,13 @@ class GLightningModel(LightningModule):
         self.save_hyperparameters(hparams)
 
         # loading of cgat model (needed for calculating the embeddings)
-        self.cgat_model = LightningModel.load_from_checkpoint(hparams.cgat_model, train=False)
+        self.cgat_model = LightningModel.load_from_checkpoint(self.hparams.cgat_model, train=False)
+        self.cgat_model.eval()
         self.cgat_model.cuda()
 
         # prepare tensor for inducing points
         embedding_dim = self.cgat_model.hparams.atom_fea_len * self.cgat_model.hparams.msg_heads
-        self.inducing_points = nn.parameter.Parameter(torch.zeros((hparams.inducing_points, embedding_dim)),
+        self.inducing_points = nn.parameter.Parameter(torch.zeros((self.hparams.inducing_points, embedding_dim)),
                                                       requires_grad=False)
 
         # datasets are loaded for training or testing not needed in production
@@ -147,6 +142,7 @@ class GLightningModel(LightningModule):
                 self.train_subset = torch.utils.data.Subset(train_set_2, train_idx)
             else:
                 self.train_subset = train_set_2
+            self.hparams.train_size = len(self.train_subset)
             print('Normalization started')
 
             def collate_fn2(data_list):
@@ -170,8 +166,9 @@ class GLightningModel(LightningModule):
                     self.cgat_model.evaluate(batch, return_graph_embedding=True), requires_grad=False)
             print('Done')
 
-        self.model = GPModel(self.inducing_points, self.cgat_model)
-        self.criterion = gpytorch.mlls.VariationalELBO(self.model.likelihood, self.model, len(self.train_subset))
+        self.model = GPModel(self.inducing_points)
+        # only init loss function for training
+        self.criterion = gpytorch.mlls.VariationalELBO(self.model.likelihood, self.model, self.hparams.train_size)
 
     def norm(self, tensor):
         """
@@ -186,8 +183,11 @@ class GLightningModel(LightningModule):
         return normed_tensor * self.std.cuda() + self.mean.cuda()
 
     def evaluate(self, batch):
-        output = self.model.forward(batch)
+        with torch.no_grad():
+            embeddings = self.cgat_model.evaluate(batch, return_graph_embedding=True)
+        output = self.model(embeddings)
         pred = self.denorm(output.mean)
+        lower, upper = output.confidence_region()
 
         device = next(self.model.parameters()).device
         b_comp, batch = [el[1] for el in batch], [el[0] for el in batch]
@@ -196,14 +196,14 @@ class GLightningModel(LightningModule):
         target = batch.y.view(len(batch.y), 1)
         target_norm = self.norm(target)
 
-        return output, pred, target, target_norm
+        return output, (self.denorm(lower), self.denorm(upper)), pred, target, target_norm
 
     def forward(self, batch):
-        _, pred, _, _ = self.evaluate(batch)
+        _, _, pred, _, _ = self.evaluate(batch)
         return pred
 
     def training_step(self, batch, batch_idx):
-        output, pred, target, target_norm = self.evaluate(batch)
+        output, _, pred, target, target_norm = self.evaluate(batch)
 
         loss = -self.criterion(output, target_norm)
 
@@ -234,7 +234,7 @@ class GLightningModel(LightningModule):
             batch_idx: identifiers of batch elements
         Returns:
         """
-        output, pred, target, target_norm = self.evaluate(batch)
+        output, _, pred, target, target_norm = self.evaluate(batch)
 
         val_loss = -self.criterion(output, target_norm)
 
@@ -252,7 +252,7 @@ class GLightningModel(LightningModule):
             batch_idx: identifiers of batch elements
         Returns:
         """
-        output, pred, target, target_norm = self.evaluate(batch)
+        output, _, pred, target, target_norm = self.evaluate(batch)
 
         test_loss = self.criterion(output, target_norm)
 
