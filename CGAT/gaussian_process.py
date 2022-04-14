@@ -3,7 +3,7 @@ import gpytorch
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from torch.nn.functional import l1_loss as mae
 from torch.nn.functional import mse_loss as mse
 
@@ -15,7 +15,7 @@ from torch_geometric.data import Batch
 from .data import CompositionData
 from .utils import cyclical_lr
 
-import glob
+from glob import glob
 import os
 from argparse import ArgumentParser
 import datetime
@@ -26,6 +26,20 @@ from sklearn.model_selection import train_test_split as split
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers.tensorboard import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
+
+import pickle
+import gzip as gz
+
+
+def EmbeddingData(data, target='e_above_hull_new'):
+    if isinstance(data, str):
+        data = pickle.load(gz.open(data))
+    else:
+        data = data
+
+    input = torch.Tensor(data['input'])
+    target = torch.Tensor(data['target'][target])
+    return TensorDataset(input, target)
 
 
 class GPModel(gpytorch.models.ApproximateGP):
@@ -65,42 +79,61 @@ class GLightningModel(LightningModule):
         self.save_hyperparameters(hparams)
 
         # loading of cgat model (needed for calculating the embeddings)
-        self.cgat_model = LightningModel.load_from_checkpoint(self.hparams.cgat_model, train=False)
-        self.cgat_model.eval()
-        self.cgat_model.cuda()
+        if self.hparams.cgat_model is not None:
+            self.cgat_model = LightningModel.load_from_checkpoint(self.hparams.cgat_model, train=False)
+            self.cgat_model.eval()
+            self.cgat_model.cuda()
+            # prepare tensor for inducing points
+            embedding_dim = self.cgat_model.hparams.atom_fea_len * self.cgat_model.hparams.msg_heads
+            self.hparams.embedding_dim = embedding_dim
+        else:
+            self.cgat_model = None
 
-        # prepare tensor for inducing points
-        embedding_dim = self.cgat_model.hparams.atom_fea_len * self.cgat_model.hparams.msg_heads
-        self.inducing_points = nn.parameter.Parameter(torch.zeros((self.hparams.inducing_points, embedding_dim)),
-                                                      requires_grad=False)
-
-        # datasets are loaded for training or testing not needed in production
+            # datasets are loaded for training or testing not needed in production
         if self.hparams.train:
             datasets = []
-            # used for single file
-            try:
-                dataset = CompositionData(
-                    data=self.hparams.data_path,
-                    fea_path=self.hparams.fea_path,
-                    max_neighbor_number=self.hparams.max_nbr,
-                    target=self.hparams.target)
-                print(self.hparams.data_path + ' loaded')
-            # used for folder of dataset files
-            except AssertionError:
-                f_n = sorted([file for file in glob.glob(os.path.join(self.hparams.data_path, "*.pickle.gz"))])
-                print("{} files to load".format(len(f_n)))
-                for file in f_n:
-                    try:
-                        datasets.append(CompositionData(
+            if self.cgat_model is not None:
+                # used for single file
+                try:
+                    dataset = CompositionData(
+                        data=self.hparams.data_path,
+                        fea_path=self.hparams.fea_path,
+                        max_neighbor_number=self.hparams.max_nbr,
+                        target=self.hparams.target)
+                    print(self.hparams.data_path + ' loaded')
+                # used for folder of dataset files
+                except AssertionError:
+                    f_n = sorted([file for file in glob(os.path.join(self.hparams.data_path, "*.pickle.gz"))])
+                    print("{} files to load".format(len(f_n)))
+                    for file in f_n:
+                        try:
+                            datasets.append(CompositionData(
+                                data=file,
+                                fea_path=self.hparams.fea_path,
+                                max_neighbor_number=self.hparams.max_nbr,
+                                target=self.hparams.target))
+                            print(file + ' loaded')
+                        except AssertionError:
+                            print(file + ' could not be loaded')
+                    print("{} files succesfully loaded".format(len(datasets)))
+                    dataset = torch.utils.data.ConcatDataset(datasets)
+            else:
+                if os.path.isfile(self.hparams.data_path):
+                    dataset = EmbeddingData(
+                        data=self.hparams.data_path,
+                        target=self.hparams.target
+                    )
+                    print(self.hparams.data_path + ' loaded')
+                elif os.path.isdir(self.hparams.data_path):
+                    dataset = torch.utils.data.ConcatDataset([
+                        EmbeddingData(
                             data=file,
-                            fea_path=self.hparams.fea_path,
-                            max_neighbor_number=self.hparams.max_nbr,
-                            target=self.hparams.target))
-                        print(file + ' loaded')
-                    except AssertionError:
-                        print(file + ' could not be loaded')
-                print("{} files succesfully loaded".format(len(datasets)))
-                dataset = torch.utils.data.ConcatDataset(datasets)
+                            target=self.hparams.target
+                        )
+                        for file in glob(os.path.join(self.hparams.data_path, '*.pickle.gz'))])
+                else:
+                    raise ValueError(f"{self.hparams.data_path!r} is neither a file nor an existing directory!")
+                self.hparams.embedding_dim = len(dataset[0][0])
 
             if self.hparams.test_path is None or self.hparams.val_path is None:
                 indices = list(range(len(dataset)))
@@ -114,18 +147,28 @@ class GLightningModel(LightningModule):
                 train_set_2 = torch.utils.data.Subset(train_set, train_idx)
                 self.val_subset = torch.utils.data.Subset(train_set, val_idx)
             else:
-                test_data = torch.utils.data.ConcatDataset([CompositionData(data=file,
-                                                                            fea_path=self.hparams.fea_path,
-                                                                            max_neighbor_number=self.hparams.max_nbr,
-                                                                            target=self.hparams.target)
-                                                            for file in glob.glob(
-                        os.path.join(self.hparams.test_path, "*.pickle.gz"))])
-                val_data = torch.utils.data.ConcatDataset([CompositionData(data=file,
-                                                                           fea_path=self.hparams.fea_path,
-                                                                           max_neighbor_number=self.hparams.max_nbr,
-                                                                           target=self.hparams.target)
-                                                           for file in glob.glob(
-                        os.path.join(self.hparams.val_path, "*.pickle.gz"))])
+                if self.cgat_model is not None:
+                    test_data = torch.utils.data.ConcatDataset([CompositionData(data=file,
+                                                                                fea_path=self.hparams.fea_path,
+                                                                                max_neighbor_number=self.hparams.max_nbr,
+                                                                                target=self.hparams.target)
+                                                                for file in glob(
+                            os.path.join(self.hparams.test_path, "*.pickle.gz"))])
+                    val_data = torch.utils.data.ConcatDataset([CompositionData(data=file,
+                                                                               fea_path=self.hparams.fea_path,
+                                                                               max_neighbor_number=self.hparams.max_nbr,
+                                                                               target=self.hparams.target)
+                                                               for file in glob(
+                            os.path.join(self.hparams.val_path, "*.pickle.gz"))])
+                else:
+                    test_data = torch.utils.data.ConcatDataset([EmbeddingData(data=file,
+                                                                              target=self.hparams.target)
+                                                                for file in glob(
+                            os.path.join(self.hparams.test_path, '*.pickle.gz'))])
+                    val_data = torch.utils.data.ConcatDataset([EmbeddingData(data=file,
+                                                                             target=self.hparams.target)
+                                                               for file in glob(
+                            os.path.join(self.hparams.val_path, '*.pickle.gz'))])
 
                 train_set = dataset
                 self.test_set = test_data
@@ -145,25 +188,40 @@ class GLightningModel(LightningModule):
             self.hparams.train_size = len(self.train_subset)
             print('Normalization started')
 
-            def collate_fn2(data_list):
-                return [el[0].y for el in data_list]
+            if self.cgat_model is not None:
+                def collate_fn2(data_list):
+                    return [el[0].y for el in data_list]
+            else:
+                def collate_fn2(data_list):
+                    return [y for x, y in data_list]
 
             sample_target = torch.cat(collate_fn2(self.train_subset))
-            self.mean = nn.parameter.Parameter(torch.mean(sample_target, dim=0, keepdim=False),
+            self.mean = nn.parameter.Parameter(torch.mean(sample_target, dim=0, keepdim=False).reshape((-1,)),
                                                requires_grad=False)
-            self.std = nn.parameter.Parameter(torch.std(sample_target, dim=0, keepdim=False), requires_grad=False)
+            self.std = nn.parameter.Parameter(torch.std(sample_target, dim=0, keepdim=False).reshape((-1,)),
+                                              requires_grad=False)
             print('mean: ', self.mean.item(), 'std: ', self.std.item())
             print('normalization ended')
 
-            print('Calculating embedding of inducing points')
-            # getting inducing_points
-            loader = DataLoader(self.train_subset, batch_size=self.hparams.inducing_points, shuffle=True,
-                                collate_fn=collate_fn)
-            batch = next(iter(loader))
-            del loader
-            with torch.no_grad():
-                self.inducing_points = nn.parameter.Parameter(
-                    self.cgat_model.evaluate(batch, return_graph_embedding=True), requires_grad=False)
+        # getting inducing_points
+        self.inducing_points = nn.parameter.Parameter(torch.zeros((self.hparams.inducing_points,
+                                                                   self.hparams.embedding_dim)),
+                                                      requires_grad=False)
+        if self.hparams.train:
+            if self.cgat_model is not None:
+                print('Calculating embedding of inducing points')
+                loader = DataLoader(self.train_subset, batch_size=self.hparams.inducing_points, shuffle=True,
+                                    collate_fn=collate_fn)
+                batch = next(iter(loader))
+                del loader
+                with torch.no_grad():
+                    self.inducing_points = nn.parameter.Parameter(
+                        self.cgat_model.evaluate(batch, return_graph_embedding=True), requires_grad=False)
+            else:
+                loader = DataLoader(self.train_subset, batch_size=self.hparams.inducing_points, shuffle=True)
+                inducing_points, _ = next(iter(loader))
+                del loader
+                self.inducing_points = nn.parameter.Parameter(inducing_points, requires_grad=False)
             print('Done')
 
         self.model = GPModel(self.inducing_points)
@@ -174,29 +232,36 @@ class GLightningModel(LightningModule):
         """
         normalizes tensor
         """
-        return (tensor - self.mean.cuda()) / self.std.cuda()
+        return (tensor - self.mean) / self.std
 
     def denorm(self, normed_tensor):
         """
         return normalized tensor to original form
         """
-        return normed_tensor * self.std.cuda() + self.mean.cuda()
+        return normed_tensor * self.std + self.mean
 
     def evaluate(self, batch):
-        with torch.no_grad():
-            embeddings = self.cgat_model.evaluate(batch, return_graph_embedding=True)
+        if self.cgat_model is not None:
+            with torch.no_grad():
+                embeddings = self.cgat_model.evaluate(batch, return_graph_embedding=True)
+            device = next(self.model.parameters()).device
+            b_comp, batch = [el[1] for el in batch], [el[0] for el in batch]
+            batch = (Batch.from_data_list(batch)).to(device)
+
+            target = batch.y.view(len(batch.y), 1)
+        else:
+            if isinstance(batch, tuple):
+                embeddings, target = batch
+            else:
+                embeddings = batch
+                target = torch.zeros(embeddings.shape[0])
+
+        target_norm = self.norm(target)
         output = self.model(embeddings)
         pred = self.denorm(output.mean)
         lower, upper = output.confidence_region()
 
-        device = next(self.model.parameters()).device
-        b_comp, batch = [el[1] for el in batch], [el[0] for el in batch]
-        batch = (Batch.from_data_list(batch)).to(device)
-
-        target = batch.y.view(len(batch.y), 1)
-        target_norm = self.norm(target)
-
-        return output, (self.denorm(lower), self.denorm(upper)), pred, target, target_norm
+        return output, (self.denorm(lower), self.denorm(upper)), pred, target.flatten(), target_norm.flatten()
 
     def forward(self, batch):
         _, _, pred, _, _ = self.evaluate(batch)
@@ -254,7 +319,7 @@ class GLightningModel(LightningModule):
         """
         output, _, pred, target, target_norm = self.evaluate(batch)
 
-        test_loss = self.criterion(output, target_norm)
+        test_loss = -self.criterion(output, target_norm)
 
         test_mae = mae(pred, target)
         test_rmse = mse(pred, target).sqrt_()
@@ -322,7 +387,7 @@ class GLightningModel(LightningModule):
                   }
         print('length of train_subset: {}'.format(len(self.train_subset)))
         train_generator = DataLoader(
-            self.train_subset, collate_fn=collate_fn, **params)
+            self.train_subset, collate_fn=collate_fn if self.cgat_model is not None else None, **params)
         return train_generator
 
     def val_dataloader(self):
@@ -339,7 +404,7 @@ class GLightningModel(LightningModule):
                   "shuffle": False}
         val_generator = DataLoader(
             self.val_subset,
-            collate_fn=collate_fn,
+            collate_fn=collate_fn if self.cgat_model is not None else None,
             **params)
         print('length of val_subset: {}'.format(len(self.val_subset)))
         return val_generator
@@ -358,7 +423,7 @@ class GLightningModel(LightningModule):
                   "shuffle": False}
         test_generator = DataLoader(
             self.test_set,
-            collate_fn=collate_fn,
+            collate_fn=collate_fn if self.cgat_model is not None else None,
             **params)
         print('length of test_subset: {}'.format(len(self.test_set)))
         return test_generator
@@ -487,7 +552,7 @@ class GLightningModel(LightningModule):
         parser.add_argument("--cgat-model",
                             default=None,
                             type=str,
-                            required=True,
+                            required=False,
                             help="Path to CGAT model, which calculates the embeddings.")
 
         return parser
@@ -598,6 +663,7 @@ def main():
 
     # START TRAINING
     trainer.fit(model)
+    return model
 
 
 if __name__ == '__main__':
