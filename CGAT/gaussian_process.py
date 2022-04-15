@@ -250,7 +250,7 @@ class GLightningModel(LightningModule):
 
             target = batch.y.view(len(batch.y), 1)
         else:
-            if isinstance(batch, tuple):
+            if isinstance(batch, list):
                 embeddings, target = batch
             else:
                 embeddings = batch
