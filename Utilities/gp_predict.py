@@ -2,14 +2,14 @@ import torch
 from CGAT.gaussian_process import GLightningModel, EmbeddingData
 from glob import glob
 from tqdm import tqdm
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader
 import os
 import pandas as pd
 import numpy as np
 
 
 def main():
-    data_paths = glob(os.path.join("new_active_learning", "A*B*", "graph_embeddings.txt"))
+    data_paths = glob(os.path.join("new_active_learning", "A*B*", "*.pickle.gz"))
     assert len(data_paths) > 0
     print(f"Found {len(data_paths)} datasets.")
 
