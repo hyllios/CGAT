@@ -43,15 +43,17 @@ def EmbeddingData(data, target='e_above_hull_new'):
 
 
 class GPModel(gpytorch.models.ApproximateGP):
-    def __init__(self, inducing_points: torch.Tensor):
+    def __init__(self, inducing_points: torch.Tensor, *,
+                 mean_module=gpytorch.means.ConstantMean,
+                 covar_module=gpytorch.kernels.RBFKernel):
         # init base class
         distribution = gpytorch.variational.CholeskyVariationalDistribution(inducing_points.size(0))
         strategy = gpytorch.variational.VariationalStrategy(self, inducing_points, distribution)
         super(GPModel, self).__init__(strategy)
 
         # init mean and covariance modules
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+        self.mean_module = mean_module()
+        self.covar_module = gpytorch.kernels.ScaleKernel(covar_module())
 
         # init likelihood
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
@@ -223,8 +225,10 @@ class GLightningModel(LightningModule):
                 del loader
                 self.inducing_points = nn.parameter.Parameter(inducing_points, requires_grad=False)
             print('Done')
-
-        self.model = GPModel(self.inducing_points)
+        if hparams.zero_mean:
+            self.model = GPModel(self.inducing_points, mean_module=gpytorch.means.ZeroMean)
+        else:
+            self.model = GPModel(self.inducing_points)
         # only init loss function for training
         self.criterion = gpytorch.mlls.VariationalELBO(self.model.likelihood, self.model, self.hparams.train_size)
 
@@ -554,6 +558,9 @@ class GLightningModel(LightningModule):
                             type=str,
                             required=False,
                             help="Path to CGAT model, which calculates the embeddings.")
+        parser.add_argument("--zero-mean",
+                            action="store_true",
+                            help="Use 'ZeroMean' as mean module for gaussian process.")
 
         return parser
 
