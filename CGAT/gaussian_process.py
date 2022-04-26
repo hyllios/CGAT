@@ -225,7 +225,7 @@ class GLightningModel(LightningModule):
                 del loader
                 self.inducing_points = nn.parameter.Parameter(inducing_points, requires_grad=False)
             print('Done')
-        if hparams.zero_mean:
+        if self.hparams.zero_mean:
             self.model = GPModel(self.inducing_points, mean_module=gpytorch.means.ZeroMean)
         else:
             self.model = GPModel(self.inducing_points)
