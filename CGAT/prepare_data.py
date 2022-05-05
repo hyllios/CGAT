@@ -12,11 +12,12 @@ from .roost_message import LoadFeaturiser
 
 
 def build_dataset_prepare(data,
-                          target_property=['e_above_hull_new', 'e-form', 'volume'],
-                          fea_path="embeddings/matscholar-embedding.json"):
-    """Use to calculate features for lists of pickle and gzipped ComputedEntry pickles,
-    returns dictionary with all necessary inputs. Use for lists with all materials having
-    the same number of atoms"""
+                          target_property=["e_above_hull_new", 'e-form', 'volume'],
+                          radius=18.0,
+                          fea_path="../embeddings/matscholar-embedding.json",
+                          max_neighbor_number=24):
+    """Use to calculate features for lists of pickle and gzipped ComputedEntry pickles (either a path to the file or the file directly), returns dictionary with all necessary inputs. If the data has no target values the target values are set to -1e8
+    Always enter list of target properties"""
 
     def tensor2numpy(l):
         """recursively convert torch Tensors into numpy arrays"""
@@ -25,7 +26,7 @@ def build_dataset_prepare(data,
         elif isinstance(l, str) or isinstance(l, int) or isinstance(l, float):
             return l
         elif isinstance(l, list) or isinstance(l, tuple):
-            return np.asarray([tensor2numpy(i) for i in l])
+            return np.asarray([tensor2numpy(i) for i in l], dtype=object)
         elif isinstance(l, dict):
             npdict = {}
             for name, val in l.items():
@@ -34,9 +35,12 @@ def build_dataset_prepare(data,
         else:
             return None  # this will give an error later on
 
-    d = CompositionDataPrepare(data=data,
+    d = CompositionDataPrepare(data,
                                fea_path=fea_path,
-                               target_property=target_property)
+                               target_property=target_property,
+                               max_neighbor_number=max_neighbor_number,
+                               radius=radius)
+
     loader = DataLoader(d, batch_size=1)
 
     input1_ = []
@@ -53,6 +57,8 @@ def build_dataset_prepare(data,
     batch_ids_ = []
 
     for input_, target, batch_comp, batch_ids in tqdm(loader):
+        if len(input_) == 1:  # remove compounds with not enough neighbors
+            continue
         input1_.append(input_[0])
         comps_.append(input_[1])
         input2_.append(input_[2])
@@ -72,16 +78,16 @@ def build_dataset_prepare(data,
 
     n = input1_[0].shape[0]
     shape = input1_.shape
-
-    try:
-        input1_ = np.reshape(input1_, (1, shape[0], n, 24))
-        input2_ = np.reshape(input2_, (1, shape[0], n, 24))
-        input3_ = np.reshape(input3_, (1, shape[0], n, 24))
-
-    except:
-        input1_ = np.asarray(input1_)
-        input2_ = np.asarray(input2_)
-        input3_ = np.asarray(input3_)
+    if len(shape) > 2:
+        i1 = np.empty(shape=(1, shape[0]), dtype=object)
+        i2 = np.empty(shape=(1, shape[0]), dtype=object)
+        i3 = np.empty(shape=(1, shape[0]), dtype=object)
+        i1[:, :, ] = [[input1_[l] for l in range(shape[0])]]
+        input1_ = i1
+        i2[:, :, ] = [[input2_[l] for l in range(shape[0])]]
+        input2_ = i2
+        i3[:, :, ] = [[input3_[l] for l in range(shape[0])]]
+        input3_ = i3
 
     inputs_ = np.vstack((input1_, input2_, input3_))
 
@@ -98,7 +104,7 @@ class CompositionDataPrepare(Dataset):
     automatically constructed from composition strings.
     """
 
-    def __init__(self, data, fea_path, target_property='e-form', radius=18.0, max_neighbor_number=24):
+    def __init__(self, data, fea_path, target_property=['e-form'], radius=18.0, max_neighbor_number=24):
         """
         """
         if isinstance(data, str):
@@ -116,21 +122,26 @@ class CompositionDataPrepare(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        cry_id = self.data[idx].data['id']
+        try:
+            cry_id = self.data[idx].data['id']
+        except KeyError:
+            cry_id = 'unknown'
         composition = self.data[idx].composition.formula
         try:
             crystal = self.data[idx].structure
         except:
             crystal = self.data[idx]
+
         elements = [element.specie.symbol for element in crystal]
-        if isinstance(self.target_property, tuple):
-            target = self.data[idx].as_dict()[self.target_property[0]][self.target_property[1]]
-        elif isinstance(self.target_property, list):
+        try:
             target = {}
             for name in self.target_property:
                 target[name] = self.data[idx].data[name] / len(crystal.sites)
-        else:
-            target = self.data[idx].data[self.target_property] / len(crystal.sites)
+        except KeyError:
+            target = {}
+            warnings.warn('no target property')
+            for name in self.target_property:
+                target[name] = -1e8
 
         all_nbrs = crystal.get_all_neighbors(self.radius, include_index=True)
         all_nbrs = [sorted(nbrs, key=lambda x: x[1])[0:self.max_num_nbr] for nbrs in all_nbrs]
@@ -139,23 +150,11 @@ class CompositionDataPrepare(Dataset):
         for site, nbr in enumerate(all_nbrs):
             nbr_fea_idx_sub, nbr_fea_sub, self_fea_idx_sub = [], [], []
             if len(nbr) < self.max_num_nbr:
-                warnings.warn('{} not find enough neighbors to build graph. '
+                warnings.warn('{} does not contain enough neighbors in the cutoff to build the full graph. '
                               'If it happens frequently, consider increase '
-                              'radius.'.format(cry_id))
-                for n in range(len(nbr)):
-                    self_fea_idx_sub.append(site)
-                for j in range(len(nbr)):
-                    nbr_fea_idx_sub.append(nbr[j][2])
-                index = 1
-                try:
-                    dist = nbr[0][1]
-                except:
-                    print('no neighbor', cry_id)
-                for el in nbr:
-                    if (el[1] > dist + 1e-8):
-                        dist = el[1]
-                        index += 1
-                    nbr_fea_sub.append(index)
+                              'radius. Compound is not added to the feature set'.format(cry_id))
+                return (torch.ones(1)), torch.ones(1), torch.ones(1), torch.ones(
+                    1)  # fake input will be removed in build_dataset_prepare
             else:
                 for n in range(self.max_num_nbr):
                     self_fea_idx_sub.append(site)
@@ -174,15 +173,15 @@ class CompositionDataPrepare(Dataset):
         return (nbr_fea, elements, self_fea_idx, nbr_fea_idx), \
                target, composition, cry_id
 
-    # def get_targets(self, idx1, idx2):
-    #     target = []
-    #     l = []
-    #     for el in idx2:
-    #         l.append(self.data[el][self.target_property])
-    #     for el in idx1:
-    #         target.append(l[el])
-    #     del l
-    #     return torch.tensor(target).reshape(len(idx1), 1)
+    def get_targets(self, idx1, idx2):
+        target = []
+        l = []
+        for el in idx2:
+            l.append(self.data[el][self.target_property])
+        for el in idx1:
+            target.append(l[el])
+        del l
+        return torch.tensor(target).reshape(len(idx1), 1)
 
 
 def collate_batch(dataset_list):
