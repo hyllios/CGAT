@@ -30,6 +30,9 @@ The package can be installed by cloning the repository and running
 pip install .
 ```
 in the repository.
+
+(If one wants to edit the source code installing with `pip install -e .` is advised.)
+
 After installing one can make use of the following console scripts:
 * `train-CGAT` to train a Crystal Graph Network,
 * `prepare` to prepare trainings data for use with CGAT,
