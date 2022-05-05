@@ -7,6 +7,7 @@ import gzip as gz
 import json
 from pymatgen.entries.computed_entries import ComputedStructureEntry
 from CGAT.prepare_data import build_dataset_prepare
+from tqdm import tqdm
 
 
 def get_composition(file: str):
@@ -27,7 +28,7 @@ def main():
     new_dir = "additional_data"
     if not os.path.exists(new_dir):
         os.mkdir(new_dir)
-    for file in files:
+    for file in tqdm(files):
         dir = os.path.join(new_dir, get_composition(file))
         if not os.path.exists(dir):
             os.mkdir(dir)
@@ -67,5 +68,5 @@ def test_get_composition():
 
 
 if __name__ == '__main__':
-    test_get_composition()
-    # main()
+    # test_get_composition()
+    main()
