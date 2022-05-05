@@ -80,6 +80,7 @@ def main():
         data = pickle.load(gzip.open(get_file(i, PATH), 'rb'))
         targets = data['target'][hparams.target].reshape((-1, 1, 1))
         loader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
+        # TODO get prediction from other GPU!
         predictions = trainer.predict(model=model, dataloaders=loader)
         for j, batch in enumerate(predictions):
             row = {'errors': mean_absolute_error(targets[j], predictions[j].cpu().numpy()),

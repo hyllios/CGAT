@@ -587,7 +587,7 @@ class CGAtNet(nn.Module):
         crys_fea = self.roost(*roost)
         crys_fea = self.cry_pool(elem_fea, crys_fea, crystal_elem_idx)
 
-        if(self.mean_pooling):
+        if self.mean_pooling:
             crys_fea = crys_fea.view(-1, self.msg_heads, self.elem_fea_len)
             crys_fea = torch.mean(crys_fea, dim=1)
             if return_graph_embedding:

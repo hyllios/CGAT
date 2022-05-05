@@ -13,6 +13,11 @@ def cap(array, upper_limit):
     return np.amin(temp, axis=1)
 
 
+def plot(embedding, value, **kwargs):
+    plt.scatter(embedding[:, 0], embedding[:, 1], c=value, **kwargs)
+    plt.colorbar()
+
+
 def main():
     comps = Path('new_active_learning').glob('A*B*')
 
@@ -33,7 +38,7 @@ def main():
                 # targets.append(target)
             elif 'log_std' in file.stem:
                 pass
-            elif 'embeddings' == file.stem:
+            elif 'graph_embeddings' == file.stem:
                 embeddings.append(np.loadtxt(file))
             else:
                 try:
@@ -53,20 +58,28 @@ def main():
     errors = cap(errors, .4)
     targets = cap(targets, .5)
 
-    tsne = TSNE(n_jobs=6, perplexity=300)
-    embedding = tsne.fit(embeddings)
+    titles = ['Error', 'Prototypes', 'distance to convex hull']
+    values = [errors, colors, targets]
 
-    plt.title('Error')
-    plt.scatter(embedding[:, 0], embedding[:, 1], c=errors, s=.5)
-    plt.colorbar()
-    plt.figure()
-    plt.title('Prototypes')
-    plt.scatter(embedding[:, 0], embedding[:, 1], c=colors, s=.5)
-    plt.show()
-    plt.figure()
-    plt.title('distance to convex hull')
-    plt.scatter(embedding[:, 0], embedding[:, 1], c=targets, s=.5)
-    plt.colorbar()
+    embedding_list = []
+    for metric in ['euclidean', 'cosine']:
+        tsne = TSNE(n_jobs=6, perplexity=500, metric=metric, exaggeration=2)
+        embedding = tsne.fit(embeddings)
+        embedding_list.append(embedding)
+
+        for title, value in zip(titles, values):
+            plt.figure()
+            plt.title(f'{title} -- {metric}')
+            plot(embedding, value, s=.5)
+        plt.show()
+
+    embedding = embedding_list[0]
+    for e in embedding_list[1:]:
+        embedding *= e
+    for title, value in zip(titles, values):
+        plt.figure()
+        plt.title(f'{title} -- product')
+        plot(embedding, value, s=.5)
     plt.show()
 
 
