@@ -1,12 +1,14 @@
-from roost_message import Roost
+import itertools
+
+from .roost_message import Roost
 import torch.nn.functional as F
 import torch
 from torch_scatter import scatter_max, scatter_add
 from torch_geometric.nn import MessagePassing
-from message_changed import SimpleNetwork, ResidualNetwork
+from .message_changed import SimpleNetwork, ResidualNetwork
 from torch_geometric.utils import softmax
 import torch.nn as nn
-from Hypernetworksmp import H_Net, H_Net_0
+from .Hypernetworksmp import H_Net, H_Net_0
 
 
 class MHAttention(nn.Module):
@@ -535,7 +537,7 @@ class CGAtNet(nn.Module):
                                              if_rezero=rezero)
 
 
-    def forward(self, batch, roost):
+    def forward(self, batch, roost, *, last_layer=True, return_graph_embedding=False):
         """
         Forward pass
 
@@ -585,13 +587,27 @@ class CGAtNet(nn.Module):
         crys_fea = self.roost(*roost)
         crys_fea = self.cry_pool(elem_fea, crys_fea, crystal_elem_idx)
 
-        if(self.mean_pooling):
+        if self.mean_pooling:
             crys_fea = crys_fea.view(-1, self.msg_heads, self.elem_fea_len)
             crys_fea = torch.mean(crys_fea, dim=1)
-            crys_fea = self.output_nn(crys_fea)
+            if return_graph_embedding:
+                return crys_fea
+            crys_fea = self.output_nn(crys_fea, last_layer=last_layer)
         else:
-            crys_fea = self.output_nn(crys_fea)
+            if return_graph_embedding:
+                return crys_fea
+            crys_fea = self.output_nn(crys_fea, last_layer=last_layer)
         return crys_fea
 
     def __repr__(self):
         return '{}'.format(self.__class__.__name__)
+
+    def get_output_parameters(self):
+        return self.output_nn.parameters()
+
+    def get_hidden_parameters(self):
+        return itertools.chain(self.embedding.parameters(),
+                               self.nbr_embedding.parameters(),
+                               self.graphs.parameters(),
+                               self.roost.parameters(),
+                               self.cry_pool.parameters())

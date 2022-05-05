@@ -1,23 +1,79 @@
-import gzip as gz
-import os
-import argparse
 
+import gzip as gz
+import sys, os
+import argparse
+import functools
+import json
 import numpy as np
+import pandas as pd
 import warnings
 import torch
 import pickle
 from torch.utils.data import Dataset, DataLoader
-from tqdm import tqdm
-from .roost_message import LoadFeaturiser
+
+
+class Featuriser(object):
+    """
+    Base class for featurising nodes and edges.
+    """
+
+    def __init__(self, allowed_types):
+        self.allowed_types = set(allowed_types)
+        self._embedding = {}
+
+    def get_fea(self, key):
+        assert key in self.allowed_types, "{} is not an allowed atom type".format(
+            key)
+        return self._embedding[key]
+
+    def load_state_dict(self, state_dict):
+        self._embedding = state_dict
+        self.allowed_types = set(self._embedding.keys())
+
+    def get_state_dict(self):
+        return self._embedding
+
+    def embedding_size(self):
+        return len(self._embedding[list(self._embedding.keys())[0]])
+
+
+class LoadFeaturiser(Featuriser):
+    """
+    Initialize atom feature vectors using a JSON file, which is a python
+    dictionary mapping from element number to a list representing the
+    feature vector of the element.
+
+    Notes
+    ---------
+    For the specific composition net application the keys are concatenated
+    strings of the form "NaCl" where the order of concatenation matters.
+    This is done because the bond "ClNa" has the opposite dipole to "NaCl"
+    so for a general representation we need to be able to asign different
+    bond features for different directions on the multigraph.
+
+    Parameters
+    ----------
+    elem_embedding_file: str
+        The path to the .json file
+    """
+
+    def __init__(self, embedding_file):
+        with open(embedding_file) as f:
+            embedding = json.load(f)
+        allowed_types = set(embedding.keys())
+        super(LoadFeaturiser, self).__init__(allowed_types)
+        for key, value in embedding.items():
+            self._embedding[key] = np.array(value, dtype=float)
+
 
 
 def build_dataset_prepare(data,
-                          target_property=["e_above_hull_new", 'e-form', 'volume'],
-                          radius=18.0,
-                          fea_path="../embeddings/matscholar-embedding.json",
-                          max_neighbor_number=24):
-    """Use to calculate features for lists of pickle and gzipped ComputedEntry pickles (either a path to the file or the file directly), returns dictionary with all necessary inputs. If the data has no target values the target values are set to -1e8
-    Always enter list of target properties"""
+                          target_property=['e_above_hull_new','e-form'],
+                          fea_path = "../embeddings/matscholar-embedding.json",
+                          id='layered_perovskites'):
+    """Use to calculate features for lists of pickle and gzipped ComputedEntry pickles, 
+    returns dictionary with all necessary inputs. Use for lists with all materials having 
+    the same number of atoms"""
 
     def tensor2numpy(l):
         """recursively convert torch Tensors into numpy arrays"""
@@ -26,68 +82,61 @@ def build_dataset_prepare(data,
         elif isinstance(l, str) or isinstance(l, int) or isinstance(l, float):
             return l
         elif isinstance(l, list) or isinstance(l, tuple):
-            return np.asarray([tensor2numpy(i) for i in l], dtype=object)
+            return np.asarray([tensor2numpy(i) for i in l])
         elif isinstance(l, dict):
             npdict = {}
             for name, val in l.items():
-                npdict[name] = tensor2numpy(val)
+                npdict[name]= tensor2numpy(val) 
             return npdict
         else:
-            return None  # this will give an error later on
-
-    d = CompositionDataPrepare(data,
+            return None # this will give an error later on
+    
+    d = CompositionDataPrepare(data=data,
                                fea_path=fea_path,
-                               target_property=target_property,
-                               max_neighbor_number=max_neighbor_number,
-                               radius=radius)
-
+                               target_property=target_property)
     loader = DataLoader(d, batch_size=1)
-
+    
     input1_ = []
     input2_ = []
     input3_ = []
     comps_ = []
     batch_comp_ = []
-    if type(target_property) == list:
+    if type(target_property)==list:
         target_ = {}
         for name in target_property:
             target_[name] = []
     else:
         target_ = []
-    batch_ids_ = []
-
-    for input_, target, batch_comp, batch_ids in tqdm(loader):
-        if len(input_) == 1:  # remove compounds with not enough neighbors
-            continue
+    batch_ids_=[]
+    
+    for input_, target, batch_comp, batch_ids in loader:
         input1_.append(input_[0])
         comps_.append(input_[1])
         input2_.append(input_[2])
         input3_.append(input_[3])
-        if isinstance(target_property, list):
+        if isinstance(target_property,list):
             for name in target_property:
                 target_[name].append(target[name])
         else:
             target_.append(target)
-
         batch_comp_.append(batch_comp)
         batch_ids_.append(batch_ids)
-
+        
     input1_ = tensor2numpy(input1_)
     input2_ = tensor2numpy(input2_)
     input3_ = tensor2numpy(input3_)
 
-    n = input1_[0].shape[0]
+    n  = input1_[0].shape[0]
     shape = input1_.shape
-    if len(shape) > 2:
-        i1 = np.empty(shape=(1, shape[0]), dtype=object)
-        i2 = np.empty(shape=(1, shape[0]), dtype=object)
-        i3 = np.empty(shape=(1, shape[0]), dtype=object)
-        i1[:, :, ] = [[input1_[l] for l in range(shape[0])]]
-        input1_ = i1
-        i2[:, :, ] = [[input2_[l] for l in range(shape[0])]]
-        input2_ = i2
-        i3[:, :, ] = [[input3_[l] for l in range(shape[0])]]
-        input3_ = i3
+    try:
+        input1_ = np.reshape(input1_,(1, shape[0], n, 24))
+        input2_ = np.reshape(input2_,(1, shape[0], n, 24)) 
+        input3_ = np.reshape(input3_,(1, shape[0], n, 24)) 
+    
+    except:
+        input1_=np.asarray(input1_)
+        input2_=np.asarray(input2_)
+        input3_=np.asarray(input3_)
 
     inputs_ = np.vstack((input1_, input2_, input3_))
 
@@ -97,21 +146,17 @@ def build_dataset_prepare(data,
             'target': tensor2numpy(target_),
             'comps': tensor2numpy(comps_)}
 
-
 class CompositionDataPrepare(Dataset):
     """
     The CompositionData dataset is a wrapper for a dataset data points are
     automatically constructed from composition strings.
     """
-
-    def __init__(self, data, fea_path, target_property=['e-form'], radius=18.0, max_neighbor_number=24):
+    def __init__(self, data, fea_path, target_property='e-form', radius=18.0, max_neighbor_number = 24):
         """
         """
-        if isinstance(data, str):
-            self.data = pickle.load(gz.open(data, 'rb'))
-        else:
-            self.data = data
-        self.radius = radius
+        self.data = pickle.load(gz.open(data,'rb'))
+        print(len(self.data))
+        self.radius =radius
         self.max_num_nbr = max_neighbor_number
         self.target_property = target_property
         assert os.path.exists(fea_path), "{} does not exist!".format(fea_path)
@@ -122,39 +167,47 @@ class CompositionDataPrepare(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        try:
-            cry_id = self.data[idx].data['id']
-        except KeyError:
-            cry_id = 'unknown'
+        cry_id ='ml_perovskites'
         composition = self.data[idx].composition.formula
         try:
             crystal = self.data[idx].structure
         except:
             crystal = self.data[idx]
-
-        elements = [element.specie.symbol for element in crystal]
-        try:
+        elements = [element.specie.symbol  for element in crystal]
+        if isinstance(self.target_property,tuple):
+            target = self.data[idx].as_dict()[self.target_property[0]][self.target_property[1]]
+        elif isinstance(self.target_property,list):
             target = {}
             for name in self.target_property:
-                target[name] = self.data[idx].data[name] / len(crystal.sites)
-        except KeyError:
-            target = {}
-            warnings.warn('no target property')
-            for name in self.target_property:
-                target[name] = -1e8
-
+                target[name] = self.data[idx].data[name]/len(crystal.sites)
+        else:
+            target = self.data[idx].data[self.target_property]/len(crystal.sites)
+        #target = target/len(crystal.sites)
+            
         all_nbrs = crystal.get_all_neighbors(self.radius, include_index=True)
         all_nbrs = [sorted(nbrs, key=lambda x: x[1])[0:self.max_num_nbr] for nbrs in all_nbrs]
-
+        
         nbr_fea_idx, nbr_fea, self_fea_idx = [], [], []
         for site, nbr in enumerate(all_nbrs):
-            nbr_fea_idx_sub, nbr_fea_sub, self_fea_idx_sub = [], [], []
+            nbr_fea_idx_sub, nbr_fea_sub, self_fea_idx_sub= [],[],[]
             if len(nbr) < self.max_num_nbr:
-                warnings.warn('{} does not contain enough neighbors in the cutoff to build the full graph. '
+                warnings.warn('{} not find enough neighbors to build graph. '
                               'If it happens frequently, consider increase '
-                              'radius. Compound is not added to the feature set'.format(cry_id))
-                return (torch.ones(1)), torch.ones(1), torch.ones(1), torch.ones(
-                    1)  # fake input will be removed in build_dataset_prepare
+                              'radius.'.format(cry_id))
+                for n in range(len(nbr)):
+                    self_fea_idx_sub.append(site)
+                for j in range(len(nbr)):
+                    nbr_fea_idx_sub.append(nbr[j][2])
+                index = 1
+                try:
+                    dist = nbr[0][1]
+                except:
+                    print('no neighbor', cry_id)
+                for el in nbr:
+                    if(el[1]>dist+1e-8):
+                        dist = el[1]
+                        index+=1
+                    nbr_fea_sub.append(index)
             else:
                 for n in range(self.max_num_nbr):
                     self_fea_idx_sub.append(site)
@@ -163,9 +216,9 @@ class CompositionDataPrepare(Dataset):
                 index = 1
                 dist = nbr[0][1]
                 for j in range(self.max_num_nbr):
-                    if (nbr[j][1] > dist + 1e-8):
+                    if(nbr[j][1]>dist+1e-8):
                         dist = nbr[j][1]
-                        index += 1
+                        index+=1
                     nbr_fea_sub.append(index)
             nbr_fea_idx.append(nbr_fea_idx_sub)
             nbr_fea.append(nbr_fea_sub)
@@ -173,15 +226,16 @@ class CompositionDataPrepare(Dataset):
         return (nbr_fea, elements, self_fea_idx, nbr_fea_idx), \
                target, composition, cry_id
 
-    def get_targets(self, idx1, idx2):
-        target = []
-        l = []
-        for el in idx2:
-            l.append(self.data[el][self.target_property])
-        for el in idx1:
-            target.append(l[el])
-        del l
-        return torch.tensor(target).reshape(len(idx1), 1)
+#    def get_targets(self, idx1, idx2):
+#        target = []
+#        l=[]
+#        for el in idx2:
+#            l.append(self.data[el][self.target_property])
+#        for el in idx1:
+#            target.append(l[el])
+#        del l
+#        return torch.tensor(target).reshape(len(idx1),1)
+
 
 
 def collate_batch(dataset_list):
@@ -224,7 +278,7 @@ def collate_batch(dataset_list):
     batch_cry_ids = []
 
     cry_base_idx = 0
-    for i, ((atom_fea, nbr_fea, self_fea_idx, nbr_fea_idx, _),
+    for i, ((atom_fea, nbr_fea, self_fea_idx, nbr_fea_idx,_),
             target, comp, cry_id) in enumerate(dataset_list):
         # number of atoms for this crystal
         n_i = atom_fea.shape[0]
@@ -233,11 +287,11 @@ def collate_batch(dataset_list):
         batch_atom_fea.append(atom_fea)
         batch_nbr_fea.append(nbr_fea)
         # mappings from bonds to atoms
-        batch_self_fea_idx.append(self_fea_idx + cry_base_idx)
-        batch_nbr_fea_idx.append(nbr_fea_idx + cry_base_idx)
+        batch_self_fea_idx.append(self_fea_idx+cry_base_idx)
+        batch_nbr_fea_idx.append(nbr_fea_idx+cry_base_idx)
 
         # mapping from atoms to crystals
-        crystal_atom_idx.append(torch.tensor([i] * n_i))
+        crystal_atom_idx.append(torch.tensor([i]*n_i))
 
         # batch the targets and ids
         batch_target.append(target)
@@ -246,11 +300,10 @@ def collate_batch(dataset_list):
 
         # increment the id counter
         cry_base_idx += n_i
-    return (torch.cat(batch_atom_fea, dim=0), torch.cat(batch_nbr_fea, dim=0), torch.cat(batch_self_fea_idx, dim=0),
-            torch.cat(batch_nbr_fea_idx, dim=0), torch.cat(crystal_atom_idx)), \
-           torch.cat(batch_target, dim=0), \
-           batch_comp, \
-           batch_cry_ids
+    return (torch.cat(batch_atom_fea, dim=0), torch.cat(batch_nbr_fea, dim=0), torch.cat(batch_self_fea_idx, dim=0), torch.cat(batch_nbr_fea_idx, dim=0), torch.cat(crystal_atom_idx)), \
+        torch.cat(batch_target, dim=0), \
+        batch_comp, \
+        batch_cry_ids
 
 
 def collate_batch2(dataset_list):
@@ -302,11 +355,11 @@ def collate_batch2(dataset_list):
         batch_atom_fea.append(atom_fea)
         batch_nbr_fea.append(nbr_fea)
         # mappings from bonds to atoms
-        batch_self_fea_idx.append(self_fea_idx + cry_base_idx)
-        batch_nbr_fea_idx.append(nbr_fea_idx + cry_base_idx)
+        batch_self_fea_idx.append(self_fea_idx+cry_base_idx)
+        batch_nbr_fea_idx.append(nbr_fea_idx+cry_base_idx)
 
         # mapping from atoms to crystals
-        crystal_atom_idx.append(torch.tensor([i] * n_i))
+        crystal_atom_idx.append(torch.tensor([i]*n_i))
 
         # batch the targets and ids
         batch_target.append(target)
@@ -315,16 +368,13 @@ def collate_batch2(dataset_list):
 
         # increment the id counter
         cry_base_idx += n_i
-    return (torch.cat(batch_atom_fea, dim=0), torch.cat(batch_nbr_fea, dim=0), torch.cat(batch_self_fea_idx, dim=0),
-            torch.cat(batch_nbr_fea_idx, dim=0), torch.cat(crystal_atom_idx)), \
-           torch.cat(batch_target, dim=0), \
-           batch_comp, \
-           batch_cry_ids
-
+    return (torch.cat(batch_atom_fea, dim=0), torch.cat(batch_nbr_fea, dim=0), torch.cat(batch_self_fea_idx, dim=0), torch.cat(batch_nbr_fea_idx, dim=0), torch.cat(crystal_atom_idx)), \
+        torch.cat(batch_target, dim=0), \
+        batch_comp, \
+        batch_cry_ids
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
-
     def __init__(self):
         self.reset()
 
@@ -343,7 +393,6 @@ class AverageMeter(object):
 
 class Normalizer(object):
     """Normalize a Tensor and restore it later. """
-
     def __init__(self, log=False):
         """tensor is taken as a sample to calculate the mean and std"""
         self.mean = torch.tensor((0))
@@ -368,20 +417,6 @@ class Normalizer(object):
         self.mean = state_dict["mean"].cpu()
         self.std = state_dict["std"].cpu()
 
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--file', default='data_0_10000.pickle.gz')
-    parser.add_argument('--source-dir', default='unprepared_volume_data')
-    parser.add_argument('--target-dir', default='data')
-    parser.add_argument('--target-file', default=None)
-    args = parser.parse_args()
-    test = build_dataset_prepare(os.path.join(args.source_dir, args.file))
-    if args.target_file is None:
-        pickle.dump(test, gz.open(os.path.join(args.target_dir, os.path.basename(args.file)), 'wb'))
-    else:
-        pickle.dump(test, gz.open(os.path.join(args.target_dir, args.target_file), 'wb'))
-
-
-if __name__ == '__main__':
-    main()
+file = sys.argv[1]
+test = build_dataset_prepare(file)
+pickle.dump(test, gz.open('features/features_'+file.replace('../../data_0921/',''),'wb'))

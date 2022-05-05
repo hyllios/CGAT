@@ -1,12 +1,12 @@
 """
 Example template for defining a system
 """
-from roost_message import collate_batch
+from .roost_message import collate_batch
 import importlib
-from lambs import JITLamb
+from .lambs import JITLamb
 import numpy as np
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 import torch
 import torch.nn as nn
@@ -17,12 +17,13 @@ from torch.nn.functional import mse_loss as mse
 
 from sklearn.model_selection import train_test_split as split
 
-from utils import RobustL1, RobustL2, cyclical_lr
+from .utils import RobustL1, RobustL2, cyclical_lr
 from torch_geometric.data import Batch
-from data import CompositionData
+from .data import CompositionData
 
 from pytorch_lightning.core import LightningModule
 import os, glob
+
 
 def collate_fn(datalist):
     return datalist
@@ -43,46 +44,66 @@ class LightningModel(LightningModule):
         # initialization of mean and standard deviation of the target data (needed for reloading without recalculation)
         self.mean = torch.nn.parameter.Parameter(torch.zeros(1), requires_grad=False)
         self.std = torch.nn.parameter.Parameter(torch.zeros(1), requires_grad=False)
-        self.hparams = hparams
+
+        # self.hparams = hparams
+        self.save_hyperparameters(hparams)
         # datasets are loaded for training or testing not needed in production
         if self.hparams.train:
             datasets = []
             # used for single file
             try:
-                dataset =CompositionData(
-                        data=self.hparams.data_path,
-                        fea_path=self.hparams.fea_path,
-                        max_neighbor_number=self.hparams.max_nbr,
-                        target=self.hparams.target)
+                dataset = CompositionData(
+                    data=self.hparams.data_path,
+                    fea_path=self.hparams.fea_path,
+                    max_neighbor_number=self.hparams.max_nbr,
+                    target=self.hparams.target)
                 print(self.hparams.data_path + ' loaded')
             # used for folder of dataset files
             except:
-                f_n = sorted([file for file in glob.glob(os.path.join(self.hparams.data_path,"*.pickle.gz"))])
+                f_n = sorted([file for file in glob.glob(os.path.join(self.hparams.data_path, "*.pickle.gz"))])
                 print("{} files to load".format(len(f_n)))
                 for file in f_n:
                     try:
                         datasets.append(CompositionData(
-                        data=file,
-                        fea_path=self.hparams.fea_path,
-                        max_neighbor_number=self.hparams.max_nbr,
-                        target=self.hparams.target))
+                            data=file,
+                            fea_path=self.hparams.fea_path,
+                            max_neighbor_number=self.hparams.max_nbr,
+                            target=self.hparams.target))
                         print(file + ' loaded')
                     except:
                         print(file + ' could not be loaded')
                 print("{} files succesfully loaded".format(len(datasets)))
                 dataset = torch.utils.data.ConcatDataset(datasets)
-            indices = list(range(len(dataset)))
-            #separating the test set
-            train_idx, test_idx = split(indices, random_state=self.hparams.seed,
-                                        test_size=self.hparams.test_size)
-            train_set = torch.utils.data.Subset(dataset, train_idx)
-            self.test_set = torch.utils.data.Subset(dataset, test_idx)
-            indices = list(range(len(train_set)))
-            # separating the validation set
-            train_idx, val_idx = split(indices, random_state=self.hparams.seed,
-                                       test_size=self.hparams.val_size / (1 - self.hparams.test_size))
-            train_set_2 = torch.utils.data.Subset(train_set, train_idx)
-            self.val_subset = torch.utils.data.Subset(train_set, val_idx)
+
+            if self.hparams.test_path is None or self.hparams.val_path is None:
+                indices = list(range(len(dataset)))
+                train_idx, test_idx = split(indices, random_state=self.hparams.seed,
+                                            test_size=self.hparams.test_size)
+                train_set = torch.utils.data.Subset(dataset, train_idx)
+                self.test_set = torch.utils.data.Subset(dataset, test_idx)
+                indices = list(range(len(train_set)))
+                train_idx, val_idx = split(indices, random_state=self.hparams.seed,
+                                           test_size=self.hparams.val_size / (1 - self.hparams.test_size))
+                train_set_2 = torch.utils.data.Subset(train_set, train_idx)
+                self.val_subset = torch.utils.data.Subset(train_set, val_idx)
+            else:
+                test_data = torch.utils.data.ConcatDataset([CompositionData(data=file,
+                                                                            fea_path=self.hparams.fea_path,
+                                                                            max_neighbor_number=self.hparams.max_nbr,
+                                                                            target=self.hparams.target)
+                                                            for file in glob.glob(
+                        os.path.join(self.hparams.test_path, "*.pickle.gz"))])
+                val_data = torch.utils.data.ConcatDataset([CompositionData(data=file,
+                                                                           fea_path=self.hparams.fea_path,
+                                                                           max_neighbor_number=self.hparams.max_nbr,
+                                                                           target=self.hparams.target)
+                                                           for file in glob.glob(
+                        os.path.join(self.hparams.val_path, "*.pickle.gz"))])
+
+                train_set = dataset
+                self.test_set = test_data
+                train_set_2 = train_set
+                self.val_subset = val_data
 
             # Use train_percentage to get errors for different training set sizes
             # but same test and validation sets
@@ -90,14 +111,18 @@ class LightningModel(LightningModule):
                 indices = list(range(len(train_set_2)))
                 train_idx, rest_idx = split(
                     indices, random_state=self.hparams.seed, test_size=1.0 - self.hparams.train_percentage / (
-                        1 - self.hparams.val_size - self.hparams.test_size))
+                            1 - self.hparams.val_size - self.hparams.test_size))
                 self.train_subset = torch.utils.data.Subset(train_set_2, train_idx)
             else:
                 self.train_subset = train_set_2
             print('Normalization started')
-            def collate_fn2(data_list): return [el[0].y for el in data_list]
+
+            def collate_fn2(data_list):
+                return [el[0].y for el in data_list]
+
             sample_target = torch.cat(collate_fn2(self.train_subset))
-            self.mean = torch.nn.parameter.Parameter(torch.mean(sample_target, dim=0, keepdim=False), requires_grad=False)
+            self.mean = torch.nn.parameter.Parameter(torch.mean(sample_target, dim=0, keepdim=False),
+                                                     requires_grad=False)
             self.std = torch.nn.parameter.Parameter(torch.std(sample_target, dim=0, keepdim=False), requires_grad=False)
             print('mean: ', self.mean.item(), 'std: ', self.std.item())
             print('normalization ended')
@@ -124,7 +149,7 @@ class LightningModel(LightningModule):
     def norm(self, tensor):
         """
         normalizes tensor
-        """ 
+        """
         return (tensor - self.mean.cuda()) / self.std.cuda()
 
     def denorm(self, normed_tensor):
@@ -152,11 +177,12 @@ class LightningModel(LightningModule):
 
         params = sum([np.prod(p.size()) for p in self.model.parameters()])
         print('this model has {0:1d} parameters '.format(params))
+
     # ---------------------
     # TRAINING
     # ---------------------
 
-    def evaluate(self, batch):
+    def evaluate(self, batch, *, last_layer=True, return_graph_embedding=False):
         """
         calculates normalized and unnormalized output of the network. 
         Batch object should include input for CGAT and Roost
@@ -174,13 +200,19 @@ class LightningModel(LightningModule):
         batch = (Batch.from_data_list(batch)).to(device)
         b_comp = collate_batch(b_comp)
         b_comp = (tensor.to(device) for tensor in b_comp)
-        output, log_std = self.model(batch, b_comp).chunk(2, dim=1)
-        target = batch.y.view(len(batch.y), 1)
-        target_norm = self.norm(target)
-        pred = self.denorm(output.data)
-        return output, log_std, pred, target, target_norm
+        if return_graph_embedding:
+            return self.model(batch, b_comp, return_graph_embedding=True)
+        if last_layer:
+            output, log_std = self.model(batch, b_comp).chunk(2, dim=1)
+            target = batch.y.view(len(batch.y), 1)
+            target_norm = self.norm(target)
+            pred = self.denorm(output.data)
+            return output, log_std, pred, target, target_norm
+        else:
+            output = self.model(batch, b_comp, last_layer=last_layer)
+            return output
 
-    def forward(self, batch, batch_idx):
+    def forward(self, batch, batch_idx=None):
         """
         Use for prediction with a dataloader
          Args:
@@ -278,22 +310,27 @@ class LightningModel(LightningModule):
         Returns:
             [optimizer], [scheduler]: Tuple of list of optimizers and list of learning rate schedulers
         """
+        # Select parameters, which should be trained
+        if self.hparams.only_residual:
+            parameters = self.model.get_output_parameters()
+        else:
+            parameters = self.model.parameters()
         # Select Optimiser
         if self.hparams.optim == "SGD":
-            optimizer = optim.SGD(self.model.parameters(),
+            optimizer = optim.SGD(parameters,
                                   lr=self.hparams.learning_rate,
                                   weight_decay=self.hparams.weight_decay,
                                   momentum=self.hparams.momentum)
         elif self.hparams.optim == "Adam":
-            optimizer = optim.Adam(self.model.parameters(),
+            optimizer = optim.Adam(parameters,
                                    lr=self.hparams.learning_rate,
                                    weight_decay=self.hparams.weight_decay)
         elif self.hparams.optim == "AdamW":
-            optimizer = optim.AdamW(self.model.parameters(),
+            optimizer = optim.AdamW(parameters,
                                     lr=self.hparams.learning_rate,
                                     weight_decay=self.hparams.weight_decay)
         elif self.hparams.optim == "LAMB":
-            optimizer = JITLamb(self.model.parameters(),
+            optimizer = JITLamb(parameters,
                                 lr=self.hparams.learning_rate,
                                 weight_decay=self.hparams.weight_decay)
         else:
@@ -303,7 +340,7 @@ class LightningModel(LightningModule):
         if self.hparams.clr:
             clr = cyclical_lr(period=self.hparams.clr_period,
                               cycle_mul=0.1,
-                              tune_mul=0.05,)
+                              tune_mul=0.05, )
             scheduler = optim.lr_scheduler.LambdaLR(optimizer, [clr])
         else:
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
@@ -373,8 +410,22 @@ class LightningModel(LightningModule):
         print('length of test_subset: {}'.format(len(self.test_set)))
         return test_generator
 
+    @classmethod
+    def load(cls, path_to_checkpoint: str, train: bool = False):
+        checkpoint = torch.load(path_to_checkpoint)
+        hparams = Namespace()
+        hparams.__dict__ = checkpoint['hyper_parameters']
+        hparams.train = train
+        model = cls(hparams)
+        model.load_state_dict(checkpoint['state_dict'])
+        model.to('cuda')
+        if not train:
+            model.eval()
+
+        return model
+
     @staticmethod
-    def add_model_specific_args(parent_parser):  # pragma: no-cover
+    def add_model_specific_args(parent_parser: ArgumentParser = None) -> ArgumentParser:  # pragma: no-cover
         """
         Parameters defined here will be available through self.hparams
         Args:
@@ -382,7 +433,10 @@ class LightningModel(LightningModule):
         Returns:
             parser: ArgumentParser for all hyperparameters and training/test settings
         """
-        parser = ArgumentParser(parents=[parent_parser])
+        if parent_parser is not None:
+            parser = ArgumentParser(parents=[parent_parser])
+        else:
+            parser = ArgumentParser()
 
         parser.add_argument("--data-path",
                             type=str,
@@ -525,6 +579,16 @@ class LightningModel(LightningModule):
                             metavar="str",
                             help="choose the target variable, the dataset dictionary should have a corresponding"
                                  "dictionary structure data['target'][target]")
+        parser.add_argument("--test-path",
+                            default=None,
+                            type=str,
+                            help="path to data set with the test set (only used in combination with --val-path)")
+        parser.add_argument("--val-path",
+                            default=None,
+                            type=str,
+                            help="path to data set with the validation set (only used in combination with --val-path)")
+        parser.add_argument("--only-residual",
+                            action="store_true",
+                            help="Train only the residual network for transfer learning.")
 
         return parser
-

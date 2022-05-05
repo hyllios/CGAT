@@ -3,12 +3,14 @@ import gzip as gz
 import os
 import sys
 
-import functools
+# import functools
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 import pickle
-from roost_message import LoadFeaturiser
+from .roost_message import LoadFeaturiser
+
+import re
 
 
 class CompositionData(Dataset):
@@ -42,7 +44,7 @@ class CompositionData(Dataset):
 
         self.radius = radius
         self.max_num_nbr = max_neighbor_number
-        if(self.data['input'].shape[0] > 3):
+        if self.data['input'].shape[0] > 3:
             self.format = 1
         else:
             self.format = 0
@@ -55,15 +57,25 @@ class CompositionData(Dataset):
         """Returns length of dataset"""
         return len(self.data['target'][self.target])
 
-    #@functools.lru_cache(maxsize=None)  # Cache loaded structures
+    # @functools.lru_cache(maxsize=None)  # Cache loaded structures
     def __getitem__(self, idx):
         composition = self.data['batch_comp'][idx]
         elements = self.data['comps'][idx]
+        if isinstance(elements, str):
+            pattern = re.compile(r'([a-z]+)(\d+)', re.IGNORECASE)
+            try:
+                matches = pattern.findall(self.data['batch_comp'][idx])
+            except TypeError:
+                matches = pattern.findall(self.data['batch_comp'][idx][0])
+            elements = []
+            for el, count in matches:
+                for _ in range(int(count)):
+                    elements.append(el)
         try:
             elements = elements.tolist()
         except BaseException:
             pass
-        if(isinstance(elements[0], list) or isinstance(elements[0], tuple)):
+        if (isinstance(elements[0], list) or isinstance(elements[0], tuple)):
             elements = [el[0] for el in elements]
         N = len(elements)
         comp = {}
@@ -90,7 +102,7 @@ class CompositionData(Dataset):
         self_fea_idx_c = torch.LongTensor(self_fea_idx_c)
         nbr_fea_idx_c = torch.LongTensor(nbr_fea_idx_c)
 
-        if(self.format == 0):
+        if (self.format == 0):
             try:
                 atom_fea = np.vstack([self.atom_features.get_fea(element)
                                       for element in elements])
@@ -124,9 +136,9 @@ class CompositionData(Dataset):
             self_fea_idx = torch.LongTensor(
                 self.data['input'][idx][1][:, 0:self.max_num_nbr].flatten())
             target = torch.Tensor([target])
-        if self.target!='volume':
+        if self.target != 'volume':
             return Data(x=atom_fea, edge_index=torch.stack((self_fea_idx, nbr_fea_idx)), edge_attr=nbr_fea,
-                    y=target * N), (atom_weights_c, atom_fea_c, self_fea_idx_c, nbr_fea_idx_c)
+                        y=target * N), (atom_weights_c, atom_fea_c, self_fea_idx_c, nbr_fea_idx_c)
         else:
             return Data(x=atom_fea, edge_index=torch.stack((self_fea_idx, nbr_fea_idx)), edge_attr=nbr_fea,
-                y=target), (atom_weights_c, atom_fea_c, self_fea_idx_c, nbr_fea_idx_c)
+                        y=target), (atom_weights_c, atom_fea_c, self_fea_idx_c, nbr_fea_idx_c)
