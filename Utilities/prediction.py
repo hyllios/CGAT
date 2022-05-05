@@ -41,7 +41,8 @@ def main():
             targets = []
             log_stds = []
             for batch in loader:
-                _, log_std, pred, target, _ = model.evaluate(batch)
+                with torch.no_grad():
+                    _, log_std, pred, target, _ = model.evaluate(batch)
                 predictions.append(pred)
                 targets.append(target)
                 log_stds.append(log_std)

@@ -6,7 +6,7 @@ import bz2
 import gzip as gz
 import json
 from pymatgen.entries.computed_entries import ComputedStructureEntry
-from CGAT.prepare_volume_data import build_dataset_prepare
+from CGAT.prepare_data import build_dataset_prepare
 
 
 def get_composition(file: str):
