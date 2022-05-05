@@ -20,10 +20,13 @@ def main():
     data_paths = glob.glob(os.path.join("additional_data", "*", "*.pickle.gz"))
     assert len(data_paths) > 0
     print(f"Found {len(data_paths)} datasets")
-    model_paths = sorted(glob.glob(os.path.join('new_active_learning', 'checkpoints', 'e_hull', '350_000', '*', '*.ckpt')),
-                         key=get_seed)
-    seeds = list(map(get_seed, model_paths))
+    # model_paths = sorted(glob.glob(os.path.join('new_active_learning', 'checkpoints', 'e_hull', '350_000', '*', '*.ckpt')),
+    #                      key=get_seed)
+    # seeds = list(map(get_seed, model_paths))
+    model_paths = glob.glob(os.path.join('new_active_learning', 'checkpoints', 'old_checkpoints', '*.ckpt'))
+    seeds = ['old']
     # df = pd.DataFrame(columns=['comp', 'seed', 'entry', 'prediction'])
+    get_embeddings = True
     for seed, model_path in zip(seeds, tqdm(model_paths)):
         model = LightningModel.load_from_checkpoint(model_path, train=False)
         model = model.cuda()
@@ -35,22 +38,34 @@ def main():
                 max_neighbor_number=model.hparams.max_nbr,
                 target=model.hparams.target
             )
-            loader = DataLoader(dataset, batch_size=100, shuffle=False, collate_fn=collate_fn)
+            loader = DataLoader(dataset, batch_size=1000, shuffle=False, collate_fn=collate_fn)
             comp = get_composition(path)
-            predictions = []
-            targets = []
-            log_stds = []
-            for batch in loader:
-                _, log_std, pred, target, _ = model.evaluate(batch)
-                predictions.append(pred)
-                targets.append(target)
-                log_stds.append(log_std)
-            dir = os.path.join('new_active_learning', comp)
-            if not os.path.isdir(dir):
-                os.makedirs(dir)
-            np.savetxt(os.path.join(dir, f'{seed}.txt'), torch.cat(predictions).cpu().numpy().reshape((-1,)))
-            np.savetxt(os.path.join(dir, f'target.txt'), torch.cat(targets).cpu().numpy().reshape((-1,)))
-            np.savetxt(os.path.join(dir, f'log_std_{seed}.txt'), torch.cat(log_stds).cpu().numpy().reshape((-1,)))
+            if not get_embeddings:
+                predictions = []
+                targets = []
+                log_stds = []
+                for batch in loader:
+                    with torch.no_grad():
+                        _, log_std, pred, target, _ = model.evaluate(batch)
+                        predictions.append(pred)
+                        targets.append(target)
+                        log_stds.append(log_std)
+                dir = os.path.join('new_active_learning', comp)
+                if not os.path.isdir(dir):
+                    os.makedirs(dir)
+                np.savetxt(os.path.join(dir, f'{seed}.txt'), torch.cat(predictions).cpu().numpy().reshape((-1,)))
+                np.savetxt(os.path.join(dir, f'target.txt'), torch.cat(targets).cpu().numpy().reshape((-1,)))
+                np.savetxt(os.path.join(dir, f'log_std_{seed}.txt'), torch.cat(log_stds).cpu().detach().numpy().reshape((-1,)))
+            else:
+                embeddings = []
+                for batch in loader:
+                    with torch.no_grad():
+                        embeddings.append(model.evaluate(batch, return_graph_embedding=True))
+                dir = os.path.join('new_active_learning', comp)
+                if not os.path.isdir(dir):
+                    os.makedirs(dir)
+                np.savetxt(os.path.join(dir, f'graph_embeddings.txt'), torch.cat(embeddings).cpu().numpy())
+
 
 
 if __name__ == '__main__':
