@@ -57,7 +57,8 @@ After installing one can make use of the following console scripts:
 
 To test the package one can download some of the data from materials cloud, e.g., https://archive.materialscloud.org/record/file?filename=dcgat_1_000.json.bz2&record_id=1485 and convert it with script in the README and save it.
 
-```import json, bz2, pickle, gzip as gz
+```
+import json, bz2, pickle, gzip as gz
 from pymatgen.entries.computed_entries import ComputedStructureEntry
 
 with bz2.open("dcgat_1_000.json.bz2") as fh:
