@@ -18,7 +18,7 @@ The code requires the following external packages:
 
 newer package versions might work.
 
-pip commands:
+pip commands tested for python 3.8:
 
 `pip install torch==1.8.0 torchvision==0.9.0+cu101 -f https://download.pytorch.org/whl/cu101/torch_stable.html`
 
