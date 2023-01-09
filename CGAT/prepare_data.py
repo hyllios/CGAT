@@ -12,7 +12,7 @@ from .roost_message import LoadFeaturiser
 
 
 def build_dataset_prepare(data,
-                          target_property=["e_above_hull ", 'e_form'],
+                          target_property=["e_above_hull", 'e_form'],
                           radius=18.0,
                           fea_path="../embeddings/matscholar-embedding.json",
                           max_neighbor_number=24):
