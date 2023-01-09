@@ -12,7 +12,7 @@ from .roost_message import LoadFeaturiser
 
 
 def build_dataset_prepare(data,
-                          target_property=["e_above_hull_new", 'e-form', 'volume'],
+                          target_property=["e_above_hull ", 'e_form'],
                           radius=18.0,
                           fea_path="../embeddings/matscholar-embedding.json",
                           max_neighbor_number=24):
@@ -371,10 +371,10 @@ class Normalizer(object):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file', default='data_0_10000.pickle.gz')
-    parser.add_argument('--source-dir', default='unprepared_volume_data')
-    parser.add_argument('--target-dir', default='data')
-    parser.add_argument('--target-file', default=None)
+    parser.add_argument('--file', default='dcgat_1_000.pickle.gz')
+    parser.add_argument('--source-dir', default='./')
+    parser.add_argument('--target-dir', default='./')
+    parser.add_argument('--target-file', default='dcgat_1_000_features.pickle.gz')
     args = parser.parse_args()
     test = build_dataset_prepare(os.path.join(args.source_dir, args.file))
     if args.target_file is None:
