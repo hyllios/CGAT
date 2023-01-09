@@ -64,13 +64,13 @@ from pymatgen.entries.computed_entries import ComputedStructureEntry
 with bz2.open("dcgat_1_000.json.bz2") as fh:
   data = json.loads(fh.read().decode('utf-8'))
 
-entries = [ComputedStructureEntry.from_dict(i) for i in data["entries"]]
+entries = [ComputedStructureEntry.from_dict(i) for i in data["entries"][:1000]]
 
 print("Found " + str(len(entries)) + " entries")
 print("\nEntry:\n", entries[0])
 print("\nStructure:\n", entries[0].structure)
 #only using the first 1000 entries to save time
-pickle.dump(entries[:1000], gz.open('dcgat_1_000.pickle.gz','wb'))
+pickle.dump(entries, gz.open('dcgat_1_000.pickle.gz','wb'))
 ```
 
 Convert the ComputedStructureEntries to features:
