@@ -75,9 +75,9 @@ pickle.dump(entries[1000], gz.open('dcgat_1_000.pickle.gz','wb'))
 
 Convert the ComputedStructureEntries to features:
 
-`python prepare_data.py  --source-dir path_to_directory_with_data --file data.pickle.gz --target-file data_features.pickle.gz --target-dir path_to_target_directory`
+`python prepare_data.py  --source-dir ../ --file dcgat_1_000.pickle.gz --target-file dcgat_1_000_features.pickle.gz --target-dir ../`
 
-Run the training script (if necessary changed the rights with chmod +x ./training_scripts/train.sh):
+Change the data-path in the training script and run it (if necessary change the rights with chmod +x ./training_scripts/train.sh):
 
 `./training_scripts/train.sh`
 
