@@ -70,7 +70,7 @@ print("Found " + str(len(entries)) + " entries")
 print("\nEntry:\n", entries[0])
 print("\nStructure:\n", entries[0].structure)
 #only using the first 1000 entries to save time
-pickle.dump(entries[1000], gz.open('dcgat_1_000.pickle.gz','wb'))
+pickle.dump(entries[:1000], gz.open('dcgat_1_000.pickle.gz','wb'))
 ```
 
 Convert the ComputedStructureEntries to features:
