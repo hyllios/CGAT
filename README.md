@@ -83,4 +83,4 @@ Change the data-path in the training script and run it (if necessary change the 
 
 Test the model:
 
-`python test.py --ckp tb_logs/runs/your_checkpoint.ckpt --data-path data.pickle.gz --fea-path embeddings/matscholar-embedding.json`
+`python test.py --ckp tb_logs/runs/your_checkpoint.ckpt --data-path dcgat_1_000_features.pickle.gz --fea-path embeddings/matscholar-embedding.json`
