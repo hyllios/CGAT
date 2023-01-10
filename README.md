@@ -55,7 +55,7 @@ After installing one can make use of the following console scripts:
 
 (A full list of command line arguments can be found by running the command with `-h`.)
 
-To test the package one can download some of the data from materials cloud, e.g., https://archive.materialscloud.org/record/file?filename=dcgat_1_000.json.bz2&record_id=1485 and convert it with script in the README and save it.
+To test the package one can download some of the data from materials cloud, e.g., https://archive.materialscloud.org/record/file?filename=dcgat_1_000.json.bz2&record_id=1485 and convert it with the script in the README and save it.
 
 ```
 import json, bz2, pickle, gzip as gz
