@@ -241,7 +241,7 @@ class HyperLinear(nn.Module):
         self.hypo_params[-1].apply(last_hyper_layer_init)
 
     def forward(self, hyper_input):
-        hypo_params = self.hypo_params(hyper_input.cuda())
+        hypo_params = self.hypo_params(hyper_input)
 
         # Indices explicit to catch erros in shape of output layer
         weights = hypo_params[..., :self.in_ch * self.out_ch]

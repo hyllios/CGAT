@@ -150,13 +150,13 @@ class LightningModel(LightningModule):
         """
         normalizes tensor
         """
-        return (tensor - self.mean.cuda()) / self.std.cuda()
+        return (tensor - self.mean) / self.std
 
     def denorm(self, normed_tensor):
         """
         return normalized tensor to original form
         """
-        return normed_tensor * self.std.cuda() + self.mean.cuda()
+        return normed_tensor * self.std + self.mean
 
     def __build_model(self):
         """
@@ -418,7 +418,6 @@ class LightningModel(LightningModule):
         hparams.train = train
         model = cls(hparams)
         model.load_state_dict(checkpoint['state_dict'])
-        model.to('cuda')
         if not train:
             model.eval()
 
