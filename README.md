@@ -77,7 +77,7 @@ Convert the ComputedStructureEntries to features:
 
 `python prepare_data.py  --source-dir ../ --file dcgat_1_000.pickle.gz --target-file dcgat_1_000_features.pickle.gz --target-dir ../`
 
-Change the data-path in the training script and run it (if necessary change the rights with chmod +x ./training_scripts/train.sh):
+Run the training script (if necessary change the rights with chmod +x ./training_scripts/train.sh). The training script assumes 2 gpus right now. If only one is available strategy=hparams.distributed_backend needs to be removed from CGAT/train.py and --gpus set to 1.:
 
 `./training_scripts/train.sh`
 
